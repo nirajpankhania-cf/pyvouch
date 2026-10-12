@@ -50,10 +50,10 @@ One phase ≈ focused session(s). End each phase with: tests green, decision not
 
 ## Phase 5 — Store + API
 
-- [ ] SQLite run store
-- [ ] `POST /reviews`, `GET /reviews`, `GET /reviews/{id}`
-- [ ] CLI writes the same store when configured
-- [ ] OpenAPI matches SPEC schemas
+- [x] SQLite run store
+- [x] `POST /reviews`, `GET /reviews`, `GET /reviews/{id}`
+- [x] CLI writes the same store when configured
+- [x] OpenAPI matches SPEC schemas
 
 ## Phase 6 — React workspace UI
 

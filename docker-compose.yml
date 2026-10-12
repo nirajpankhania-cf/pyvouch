@@ -7,6 +7,7 @@ services:
       # Set on the host to enable the agentic pass; absent degrades to Pass 1.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       VOUCH_REPO_ROOT: /workspace
+      VOUCH_DB: /data/runs.db
     volumes:
       # Read-only: the verifier must never mutate the repo under review.
       - ${VOUCH_TARGET_REPO:-.}:/workspace:ro

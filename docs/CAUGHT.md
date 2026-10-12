@@ -94,3 +94,23 @@ worked. Ruff doesn't flag unused module-level functions, which is exactly the ga
 agentic `dead-integration` code is meant to cover once Pass 2 lands.
 
 **Fix:** deleted. Logged here as a reminder that Pass 1 cannot see this class of problem.
+
+## 2026-10-12 · nothing · a clean run, and the bug it couldn't have found
+
+The Phase 5 diff (run store, three `/reviews` endpoints, CLI `--save`) ran **clean**:
+no placeholders, no missing imports, no gutted tests, and enough task overlap across
+`store/`, `api/`, `cli.py`, SPEC and PLAN that scope held.
+
+Honest counterpoint: that diff shipped with a real defect, and Pass 1 was never going to
+see it. `RunStore` held one long-lived SQLite connection, which FastAPI promptly used
+from a threadpool worker:
+
+```
+sqlite3.ProgrammingError: SQLite objects created in a thread can only be used in that
+same thread.
+```
+
+Sixteen API tests failed. The tests caught it; vouch structurally cannot — it's a runtime
+concurrency property, not an intent mismatch, and "does this diff match the task?" has
+nothing to say about it. Worth writing down precisely because a clean verdict is easy to
+over-read: `clean` means *no evidence of the five failure modes*, not *correct*.

@@ -13,6 +13,7 @@ from typer.testing import CliRunner
 from vouch import __version__
 from vouch.cli import app
 from vouch.core.types import ALL_ISSUE_CODES
+from vouch.store.runs import RunStore
 
 runner = CliRunner()
 
@@ -94,6 +95,51 @@ class TestJsonOutput:
         monkeypatch.chdir(git_repo)
         result = runner.invoke(app, ["check", "-m", "nothing", "--no-agent", "--json"])
         json.loads(result.stdout)  # the whole of stdout must be the report
+
+
+class TestRecordingRuns:
+    def test_save_writes_a_run_the_ui_can_open(self, git_repo: Path, tmp_path, monkeypatch):
+        db = tmp_path / "cli-runs.db"
+        monkeypatch.setenv("VOUCH_DB", str(db))
+        monkeypatch.chdir(git_repo)
+        runner.invoke(app, ["check", "-m", "add a worker", "--no-agent", "--save"])
+        store = RunStore(db)
+        (summary,) = store.list()
+        assert summary.task_text == "add a worker"
+        assert store.get(summary.id)["version"] == 1
+
+    def test_configured_store_records_without_the_flag(self, git_repo: Path, tmp_path, monkeypatch):
+        db = tmp_path / "configured.db"
+        monkeypatch.setenv("VOUCH_DB", str(db))
+        monkeypatch.chdir(git_repo)
+        runner.invoke(app, ["check", "-m", "nothing", "--no-agent"])
+        assert RunStore(db).count() == 1
+
+    def test_nothing_is_recorded_by_default(self, git_repo: Path, tmp_path, monkeypatch):
+        db = tmp_path / "unused.db"
+        monkeypatch.delenv("VOUCH_DB", raising=False)
+        monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+        monkeypatch.chdir(git_repo)
+        runner.invoke(app, ["check", "-m", "nothing", "--no-agent"])
+        assert not db.exists()
+        assert not (tmp_path / "vouch").exists()
+
+    def test_saving_does_not_disturb_json_output(self, git_repo: Path, tmp_path, monkeypatch):
+        monkeypatch.setenv("VOUCH_DB", str(tmp_path / "runs.db"))
+        monkeypatch.chdir(git_repo)
+        result = runner.invoke(app, ["check", "-m", "nothing", "--no-agent", "--json"])
+        json.loads(result.stdout)
+
+    def test_a_broken_store_does_not_change_the_exit_code(
+        self, git_repo: Path, tmp_path, monkeypatch
+    ):
+        # A directory where the database file should be: sqlite cannot open it.
+        broken = tmp_path / "runs.db"
+        broken.mkdir()
+        monkeypatch.setenv("VOUCH_DB", str(broken))
+        monkeypatch.chdir(git_repo)
+        result = runner.invoke(app, ["check", "-m", "nothing", "--no-agent"])
+        assert result.exit_code == 0
 
 
 class TestInstalledEntryPoint:

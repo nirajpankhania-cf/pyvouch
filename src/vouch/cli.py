@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import sqlite3
 import sys
 
 import typer
@@ -15,6 +17,7 @@ from vouch.core.pipeline import CheckCrashError, PipelineOptions, run_pipeline
 from vouch.core.report import exit_code_for
 from vouch.core.types import ALL_ISSUE_CODES, CODE_MEANINGS, DETERMINISTIC_ISSUE_CODES
 from vouch.render import render
+from vouch.store.runs import RunStore
 
 app = typer.Typer(
     name="vouch",
@@ -38,6 +41,9 @@ def check(
     json_out: bool = typer.Option(False, "--json", help="Machine-readable report."),
     no_agent: bool = typer.Option(False, "--no-agent", help="Pass 1 only, no API key needed."),
     model: str = typer.Option(None, "--model", help="Override the agent model."),
+    save: bool = typer.Option(
+        False, "--save", help="Record this run so the workspace UI can open it."
+    ),
 ) -> None:
     """Verify that a diff matches the task you asked for."""
     if staged and base:
@@ -58,6 +64,13 @@ def check(
         )
     except (DiffError, TaskError, GitError, CheckCrashError) as exc:
         _fail(str(exc))
+
+    if save or os.environ.get("VOUCH_DB"):
+        try:
+            RunStore().save(result.report, result.duration_ms)
+        except sqlite3.Error as exc:
+            # A broken store must not change the verdict a CI job sees.
+            typer.secho(f"vouch: could not record run ({exc})", fg=typer.colors.YELLOW, err=True)
 
     if json_out:
         typer.echo(json.dumps(result.report.to_json_dict(), indent=2))

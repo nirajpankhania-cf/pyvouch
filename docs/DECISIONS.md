@@ -32,3 +32,11 @@ One line per significant technical decision: `choice over alternative: reason`.
 - Verdict classifications reconciled against the hunks we sent over trusting the model's file list: a fabricated path in the report would be worse than a missing one; falls back to file-only matching when ranges drift.
 - Model-emitted findings validated against the whole agentic taxonomy over just the emittable subset: a valid-but-derived code degrades to a dropped finding rather than failing the parse of an otherwise good verdict.
 - Sibling-module resolution via `sibling_modules` over adding `tests/` as a source root: Python and pytest both put a file's own directory on `sys.path`, which is a per-directory fact, not a project-wide one (dogfooded, `docs/CAUGHT.md`).
+- Stdlib `sqlite3` over SQLAlchemy for the run store: the report is already a versioned JSON document and there is one table with one query shape, so an ORM buys nothing and `sqlalchemy` left the `api` extra entirely.
+- Report stored whole as JSON with verdict/counts/branch/commit duplicated into columns over normalising findings into tables: the list view then needs no parsing, and a schema-version bump doesn't require a migration to keep reading old runs.
+- `check_same_thread=False` plus an explicit lock over thread-local connections: FastAPI runs sync handlers in a threadpool, and the file-backed path already opens a connection per operation, so only the long-lived in-memory connection needs guarding.
+- Store injected via FastAPI `Depends` with an `Annotated` alias over a module-level singleton: tests override it through `dependency_overrides` without patching globals, and the alias keeps ruff's B008 satisfied.
+- API persists every review but the CLI only on `--save` or a configured `VOUCH_DB` over always persisting: a CI job should not accumulate state nobody reads.
+- Store failures warn and preserve the exit code over aborting the run: persistence is a convenience for the UI and must never change a verdict CI depends on.
+- `task.source = "api"` and `prompt=False` on the HTTP path over reusing CLI task resolution: a server must never block on a TTY prompt or silently judge a guessed transcript task.
+- OpenAPI asserted against the SPEC's route/field table in tests over trusting review: the schema is the UI's contract, and drift is otherwise invisible until the frontend breaks.

@@ -28,6 +28,7 @@ vouch check [options]
   --json                 Machine-readable report
   --no-agent             Pass 1 only
   --model <id>           Override agent model (default claude-opus-5-5)
+  --save                 Record the run so the workspace UI can open it
 
 vouch init               Write config + gitignore TASK.md
 vouch list-codes         Print issue codes
@@ -138,18 +139,41 @@ attributes stay snake_case and serialize through a pydantic alias generator.
 }
 ```
 
-## HTTP API (v1 sketch)
+## HTTP API (v1)
 
-- `POST /reviews` — body: `{ task, mode: working|staged|base, baseRef?, noAgent?, model? }` relative to a configured repo root (local v1). Returns full report + `id`.
-- `GET /reviews` — newest first; summary fields for the list.
-- `GET /reviews/{id}` — full report.
-- `GET /health` — liveness.
+Default port **8741**. All bodies and responses use the same camelCase wire keys as `--json`.
+
+| Route | Purpose |
+|---|---|
+| `POST /reviews` | Run the pipeline against the configured repo root. `201` + full report. |
+| `GET /reviews` | History, newest first. Summary fields only. |
+| `GET /reviews/{id}` | The stored report, byte-identical to what `POST` returned. |
+| `GET /health` | Liveness, version, repo root, whether an API key is present. |
+
+`POST /reviews` body: `{ task, mode: working|staged|base, baseRef?, noAgent?, model? }`.
+`task` is required and becomes `task.source = "api"` — the API never prompts and never
+guesses from a transcript. Response adds `id`, `agentStatus`, `agentError`, `durationMs`
+alongside `report`.
+
+`GET /reviews` takes `limit` (1–200, default 50) and `offset`, and returns
+`{ runs, total }` where `total` counts all stored runs, not just the page.
+
+Status codes: `400` the repo or ref is unusable (not a git repo, bad base ref) ·
+`422` the request body is invalid · `404` unknown run id · `500` a check crashed.
+The repo root comes from `VOUCH_REPO_ROOT` (the container mounts it read-only).
 
 Auth: none for local v1. GitHub OAuth/App only if a later phase adds remote PR fetch.
 
 ## Persistence
 
-Each completed pipeline writes a run (SQLite). UI lists newest-first; opening a run shows the same inspection layout as a fresh result.
+Runs live in one SQLite table; the report is stored as the JSON document above, with
+verdict/counts/branch/commit duplicated into columns so the history list never has to
+parse a report. Location: `VOUCH_DB`, else `$XDG_DATA_HOME/vouch/runs.db`.
+
+The API records every completed review. The CLI records only when asked (`--save`) or
+configured (`VOUCH_DB` set), so a CI run does not accumulate state nobody reads. A store
+that cannot be written warns and leaves the exit code alone — persistence must never
+change a verdict.
 
 ## UI inspection layout
 
