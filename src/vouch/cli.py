@@ -16,6 +16,7 @@ from vouch.context.task import TaskError
 from vouch.core.pipeline import CheckCrashError, PipelineOptions, run_pipeline
 from vouch.core.report import exit_code_for
 from vouch.core.types import ALL_ISSUE_CODES, CODE_MEANINGS, DETERMINISTIC_ISSUE_CODES
+from vouch.envfile import load_env_file
 from vouch.render import render
 from vouch.store.runs import RunStore
 
@@ -46,6 +47,7 @@ def check(
     ),
 ) -> None:
     """Verify that a diff matches the task you asked for."""
+    load_env_file()
     if staged and base:
         _fail("--staged and --base are mutually exclusive.")
 

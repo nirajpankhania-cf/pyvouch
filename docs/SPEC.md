@@ -175,6 +175,19 @@ configured (`VOUCH_DB` set), so a CI run does not accumulate state nobody reads.
 that cannot be written warns and leaves the exit code alone — persistence must never
 change a verdict.
 
+## Environment
+
+| Variable | Effect |
+|---|---|
+| `ANTHROPIC_API_KEY` | Enables Pass 2. Absent → `no-api-key`, Pass 1 still reports. |
+| `VOUCH_REPO_ROOT` | The repo the API reviews. Default: server working directory. |
+| `VOUCH_DB` | Run store location; also makes the CLI record without `--save`. |
+| `VOUCH_ENV_FILE` | Read this file instead of `./.env`. |
+
+Both the CLI and the API load `./.env` on startup (see `.env.example`). A real environment
+variable always wins over the file, including one exported as empty. Parsing is deliberately
+minimal — `KEY=value`, optional `export`, optional quotes, `#` comments — not a full dotenv.
+
 ## UI inspection layout
 
 One screen = one run:

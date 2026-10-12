@@ -40,3 +40,5 @@ One line per significant technical decision: `choice over alternative: reason`.
 - Store failures warn and preserve the exit code over aborting the run: persistence is a convenience for the UI and must never change a verdict CI depends on.
 - `task.source = "api"` and `prompt=False` on the HTTP path over reusing CLI task resolution: a server must never block on a TTY prompt or silently judge a guessed transcript task.
 - OpenAPI asserted against the SPEC's route/field table in tests over trusting review: the schema is the UI's contract, and drift is otherwise invisible until the frontend breaks.
+- A ~40-line stdlib `.env` reader over the `python-dotenv` dependency: vouch needs one variable from a file, and the full dotenv feature set (interpolation, cascades, multi-line values) is surface area with no user behind it.
+- `.env` never overrides a real environment variable, including an exported-but-empty one: an explicit shell export is a deliberate choice and a file on disk should not silently win in CI.

@@ -17,6 +17,7 @@ frontend/dist/
 # Local state
 .env
 .env.*
+!.env.example
 *.db
 *.sqlite3
 

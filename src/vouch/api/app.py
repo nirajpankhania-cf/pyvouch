@@ -26,10 +26,14 @@ from vouch.context.gitcmd import GitError
 from vouch.context.task import TaskError
 from vouch.core.pipeline import CheckCrashError, PipelineOptions, run_pipeline
 from vouch.core.types import TaskInfo
+from vouch.envfile import load_env_file
 from vouch.store.runs import RunStore, default_db_path
 
 # The repo under review. In the container this is the read-only mount.
 REPO_ROOT_ENV = "VOUCH_REPO_ROOT"
+
+# Before the app exists, so /health reports key availability accurately.
+load_env_file()
 
 app = FastAPI(
     title="vouch",
