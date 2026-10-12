@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -174,6 +175,14 @@ class TestOpenApiMatchesSpec:
         assert set(paths["/reviews"]) == {"get", "post"}
         assert set(paths["/reviews/{run_id}"]) == {"get"}
         assert set(paths["/prompts"]) == {"get"}
+
+    def test_the_dev_server_proxies_every_route(self, client):
+        # A route missing from the Vite proxy works on 8741 and silently fails on
+        # 8742, where the dev server answers with index.html instead.
+        config = (Path(__file__).parents[1] / "frontend" / "vite.config.ts").read_text()
+        proxied = set(re.findall(r'"(/[^"]+)":\s*"http://127\.0\.0\.1:8741"', config))
+        paths = client.get("/openapi.json").json()["paths"]
+        assert {"/" + path.split("/")[1] for path in paths} <= proxied
 
     def test_request_body_fields_are_camel_case(self, client):
         schema = client.get("/openapi.json").json()

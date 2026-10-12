@@ -101,7 +101,7 @@ Check it:
 
 ```bash
 vouch version          # 0.1.0
-pytest                 # 530 passed
+pytest                 # 531 passed
 ruff check .
 ```
 
@@ -118,6 +118,15 @@ cp .env.example .env
 `export ANTHROPIC_API_KEY=…` also works. Without a key, `vouch check` still runs and
 tells you Pass 2 was skipped.
 
+> **`.env` is read from the directory you run vouch in**, not from where vouch is
+> installed. That is fine for the API (started from this checkout), but `vouch check` in
+> *another* repo will not see this file and will skip Pass 2 for lack of a key. Point it
+> here once per terminal:
+>
+> ```bash
+> export VOUCH_ENV_FILE=~/path/to/pyvouch/.env
+> ```
+
 Get a key at [console.anthropic.com](https://console.anthropic.com/settings/keys).
 
 ### 3. Run it on a repo
@@ -129,20 +138,47 @@ vouch check -m "what you asked the agent to do"
 
 vouch reads the repo you are standing in. It never writes to it.
 
+Add `--no-agent` for Pass 1 only (instant, free). Add `--save` to record the run so it
+appears in the workspace UI's history — the CLI does not record by default, so a CI job
+does not accumulate state nobody reads.
+
 ### 4. Run the API and workspace UI (optional)
 
-Two terminals, because the UI is a separate dev server:
+There are two ways to get the UI. Both talk to the same API on 8741; they differ only in
+who serves the frontend files.
+
+**Single port — for using or presenting it.** Build the frontend once and FastAPI serves
+it alongside the API:
 
 ```bash
-# terminal 1 — the API, pointed at the repo you want to review
+cd frontend && npm install && npm run build && cd ..
 source .venv/bin/activate
-VOUCH_REPO_ROOT=/path/to/your/project uvicorn vouch.api.app:app --reload --port 8741
+VOUCH_REPO_ROOT=/path/to/your/project uvicorn vouch.api.app:app --port 8741
+```
 
-# terminal 2 — the workspace
-cd frontend && npm install && npm run dev
+Open **http://localhost:8741**.
+
+**Two ports — for working on the frontend.** Keep the API running as above, then in a
+second terminal:
+
+```bash
+cd frontend && npm run dev
 ```
 
 Open **http://localhost:8742**.
+
+| | `uvicorn` on **8741** | `npm run dev` on **8742** |
+|---|---|---|
+| What it is | The Python API, plus the UI from `frontend/dist` | Vite's dev server for the TypeScript source |
+| UI is | The last `npm run build` — stale until you rebuild | Live source, hot-reloaded on save |
+| Needs | Python only (after one build) | Node, **and** the API on 8741 running |
+| API calls | Answered directly | Proxied to 8741 (`vite.config.ts`) |
+| Use it for | Demos, Docker, everyday use | Changing the UI |
+
+So the API always lives on 8741; 8742 is only ever a faster way to edit the screen in
+front of it. If the two disagree, 8741 is showing an old build — rerun `npm run build`.
+
+`localhost` and `127.0.0.1` are the same address; uvicorn just prints the number.
 
 ### 5. Or use Docker
 
@@ -168,7 +204,7 @@ by the filesystem rather than by good intentions.
 | `ANTHROPIC_API_KEY` | Enables Pass 2 | unset → Pass 1 only |
 | `VOUCH_REPO_ROOT` | **Which repo the API reviews.** The CLI ignores this and uses your current directory. | the server's working directory |
 | `VOUCH_DB` | Run-history database. Setting it also makes the CLI record runs without `--save`. | `$XDG_DATA_HOME/vouch/runs.db` |
-| `VOUCH_ENV_FILE` | Read this file instead of `./.env` | `./.env` |
+| `VOUCH_ENV_FILE` | Read this file instead of `./.env`. Needed to run Pass 2 from a repo other than this one. | `.env` in the current directory |
 | `VOUCH_UI_DIR` | Where the built frontend lives | `frontend/dist` |
 
 **About `VOUCH_REPO_ROOT`:** it only matters for the API and Docker. The CLI already knows
@@ -282,9 +318,9 @@ real. The five scenarios are chosen to cover the verdict space:
 | Scenario | Verdict | What it shows |
 |---|---|---|
 | Retry, done properly | `clean` | `requested` plus two `supporting` hunks |
-| Retry, importing a module nobody wrote | `fail` | `hallucinated-import`, a stub, a disabled test |
+| Retry, importing a module nobody wrote | `fail` | `unresolved-import`, a stub, a disabled test |
 | A quantity argument, plus an unrelated file | `review` | scope creep with nothing actually broken |
-| A test file deleted instead of updated | `fail` | `removed-test` and `unintended-removal` |
+| A test file deleted instead of updated | `fail` | `test-tampering` (an error) and `unintended-removal` |
 | Docstrings and a helper, but not the feature | `review` | `request-unfulfilled` — the Pass 2 catch Pass 1 cannot make |
 
 It leaves the second scenario's diff uncommitted, so hitting **Request review** during a
@@ -301,6 +337,35 @@ VOUCH_REPO_ROOT=/tmp/vouch-demo-seed uvicorn vouch.api.app:app --port 8741
 > whichever repo the API is pointed at. Prompts are the opposite: `GET /prompts` is keyed
 > to `VOUCH_REPO_ROOT`, so point the API at a repo you have actually used an agent in if
 > you want the picker populated.
+
+#### Giving a live demo
+
+About five minutes, after seeding as above:
+
+```bash
+# terminal 1 — the workspace, on the demo repo
+source .venv/bin/activate
+VOUCH_REPO_ROOT=/tmp/vouch-demo-seed uvicorn vouch.api.app:app --port 8741
+
+# terminal 2 — the CLI, in the demo repo
+source ~/path/to/pyvouch/.venv/bin/activate
+cd /tmp/vouch-demo-seed
+export VOUCH_ENV_FILE=~/path/to/pyvouch/.env
+```
+
+1. **History.** Open http://localhost:8741 and the *currency field* run: nothing is
+   broken, everything parses, and Pass 2 still says `request-unfulfilled` — the feature
+   simply is not there. Then the *retry, done properly* run, to show what `clean` looks
+   like with `requested` and `supporting` tags.
+2. **CI's view.** In terminal 2:
+   `vouch check --no-agent -m "add retry with exponential backoff to PricingClient.fetch_price"`
+   — instant, no tokens, `FAIL`, exit code `1`. This is what a pipeline runs.
+3. **Add intent.** The same command without `--no-agent`, plus `--save`. About 8s and 8k
+   tokens; Pass 2 adds that the backoff was never delivered and marks the skipped test
+   `unrequested`.
+4. **Back to the browser.** Refresh: the run from step 3 is at the top of history. Click
+   a finding to jump to its line. Or skip the CLI and use **Request review** in the UI
+   with the same task — the result is identical, because both call the same pipeline.
 
 ---
 
@@ -645,7 +710,7 @@ hunk classifications, so there is exactly one source for it.
 
 ```bash
 source .venv/bin/activate
-pytest                  # 530 tests
+pytest                  # 531 tests
 ruff check .
 cd frontend && npm test && npm run typecheck && npm run build
 ```

@@ -215,7 +215,9 @@ change a verdict.
 | `VOUCH_DB` | Run store location; also makes the CLI record without `--save`. |
 | `VOUCH_ENV_FILE` | Read this file instead of `./.env`. |
 
-Both the CLI and the API load `./.env` on startup (see `.env.example`). A real environment
+Both the CLI and the API load `.env` from the **current working directory** on startup (see
+`.env.example`), so `vouch check` run in another repo needs `VOUCH_ENV_FILE` to find a key
+kept in this checkout. A real environment
 variable always wins over the file, including one exported as empty. Parsing is deliberately
 minimal — `KEY=value`, optional `export`, optional quotes, `#` comments — not a full dotenv.
 

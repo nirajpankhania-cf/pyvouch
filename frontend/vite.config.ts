@@ -12,6 +12,7 @@ export default defineConfig({
     proxy: {
       "/health": "http://127.0.0.1:8741",
       "/reviews": "http://127.0.0.1:8741",
+      "/prompts": "http://127.0.0.1:8741",
       "/openapi.json": "http://127.0.0.1:8741",
     },
   },

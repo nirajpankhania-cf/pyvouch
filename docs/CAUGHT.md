@@ -235,3 +235,17 @@ in a docstring, which is a real one, and the only file in the repo that trips th
 fixture generator. A `warn` the author can read and dismiss is a better trade than a
 blind spot, and `placeholders.py` already carries the exemptions that are worth the
 complexity (abstract methods, `Protocol` bodies, `.pyi` stubs, quoted markers in prose).
+
+---
+
+## A route that only worked on one port
+
+Not caught by vouch, caught while writing the README section that explains 8741 versus
+8742. `GET /prompts` was added to the API but not to the Vite dev-server proxy, so on 8742
+the request fell through to Vite, which answered with `index.html`. The UI's fetch failed
+to parse that, the error was (deliberately) swallowed because the picker is optional, and
+the picker simply never appeared — on one of the two ports, with no error anywhere.
+
+**Fix:** add the route, and a pytest that every OpenAPI path prefix appears in
+`vite.config.ts`, so the next new route fails CI instead of failing quietly in a browser.
+Verified the test fails without the fix.
