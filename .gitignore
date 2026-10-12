@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node (frontend/)
+node_modules/
+frontend/dist/
+
+# Local state
+.env
+.env.*
+*.db
+*.sqlite3
+
+# Agent harness config (local only)
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+
+# OS / editor
+.DS_Store
