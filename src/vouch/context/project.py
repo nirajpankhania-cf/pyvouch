@@ -11,9 +11,11 @@ check drops to low confidence rather than guessing.
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
 from vouch.core.types import Hunk, ProjectAccess
@@ -54,12 +56,162 @@ def build_project_access(hunks: list[Hunk], cwd: str | Path) -> ProjectAccess:
         installed |= _declared_dependencies(root)
         discovered = False
 
+    index = _build_module_index(root)
     return ProjectAccess(
         repo_root=str(root),
         files=_read_touched_files(hunks, root),
         installed_modules=installed,
         env_discovered=discovered,
+        module_files=index.files,
+        module_exports=index.exports,
+        opaque_modules=index.opaque,
     )
+
+
+# Directories never worth walking for the module index.
+_SKIP_DIRS = frozenset(
+    {
+        ".git",
+        ".venv",
+        "venv",
+        ".virtualenv",
+        "env",
+        "node_modules",
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        "build",
+        "dist",
+        "site-packages",
+    }
+)
+
+# Parsing is cheap per file but unbounded repos are not. Past this, the
+# imports check still works on the environment, just without export checking.
+_MAX_INDEXED_FILES = 4000
+
+
+@dataclass
+class _ModuleIndex:
+    files: dict[str, str]
+    exports: dict[str, set[str]]
+    opaque: set[str]
+
+
+def _build_module_index(root: Path) -> _ModuleIndex:
+    """Map the repo's own modules to their paths and top-level names.
+
+    Both flat and src layouts are indexed, so ``import mypkg.thing`` resolves
+    whether the package sits at the root or under ``src/``.
+    """
+    index = _ModuleIndex(files={}, exports={}, opaque=set())
+    count = 0
+
+    for container in ("", "src", "lib"):
+        source_root = root / container if container else root
+        if not source_root.is_dir():
+            continue
+        for path in _walk_python(source_root):
+            if count >= _MAX_INDEXED_FILES:
+                return index
+            count += 1
+            dotted = _dotted_name(path.relative_to(source_root))
+            if not dotted or dotted in index.files:
+                continue
+            try:
+                source = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                continue
+            index.files[dotted] = path.relative_to(root).as_posix()
+            try:
+                tree = ast.parse(source)
+            except (SyntaxError, ValueError, RecursionError):
+                # Unparseable: record it exists, but claim nothing about names.
+                index.opaque.add(dotted)
+                continue
+            names, opaque = _top_level_names(tree)
+            index.exports[dotted] = names
+            if opaque:
+                index.opaque.add(dotted)
+    return index
+
+
+def _walk_python(source_root: Path):
+    stack = [source_root]
+    while stack:
+        current = stack.pop()
+        try:
+            entries = list(current.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.is_dir():
+                if entry.name not in _SKIP_DIRS and not entry.name.endswith((".egg-info",)):
+                    stack.append(entry)
+            elif entry.suffix == ".py":
+                yield entry
+
+
+def _dotted_name(relative: Path) -> str:
+    parts = list(relative.parts)
+    if parts[-1] == "__init__.py":
+        parts.pop()
+    else:
+        parts[-1] = parts[-1][:-3]
+    if not parts or not all(part.isidentifier() for part in parts):
+        return ""
+    return ".".join(parts)
+
+
+def _top_level_names(tree: ast.Module) -> tuple[set[str], bool]:
+    """Public top-level names, plus whether the module re-exports dynamically.
+
+    ``__all__`` wins when present. A star import or module-level
+    ``__getattr__`` makes absence meaningless, so the module is marked opaque.
+    """
+    names: set[str] = set()
+    opaque = False
+    explicit: set[str] | None = None
+
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            names.add(node.name)
+            if node.name == "__getattr__":
+                opaque = True
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    names.add(target.id)
+                    if target.id == "__all__":
+                        explicit = _literal_strings(node.value)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if alias.name == "*":
+                    opaque = True
+                else:
+                    names.add(alias.asname or alias.name)
+
+    if explicit is not None:
+        # __all__ is the module's own statement of intent, but names defined
+        # outside it are still importable, so keep both.
+        names |= explicit
+    return names, opaque
+
+
+def _literal_strings(node: ast.expr) -> set[str]:
+    if not isinstance(node, ast.List | ast.Tuple | ast.Set):
+        return set()
+    return {
+        element.value
+        for element in node.elts
+        if isinstance(element, ast.Constant) and isinstance(element.value, str)
+    }
 
 
 def _read_touched_files(hunks: list[Hunk], root: Path) -> dict[str, str]:

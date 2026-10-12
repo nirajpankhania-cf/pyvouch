@@ -24,13 +24,13 @@ One phase ≈ focused session(s). End each phase with: tests green, decision not
 
 ## Phase 2 — Pass 1 static checks (Python)
 
-- [ ] `placeholders` (added-line patterns + careful empty-body detection)
-- [ ] `tests` (pytest paths, skip markers, assertion delta)
-- [ ] `imports` (`ast` + resolution; project + installed)
-- [ ] `scope` (token overlap; infra denylist; low confidence)
-- [ ] Terminal + JSON reporters; exit codes
-- [ ] Milestone: `vouch check --no-agent` useful on a Python repo
-- [ ] Start `docs/CAUGHT.md` dogfood log
+- [x] `placeholders` (comment idioms outside quotes + AST empty-body detection with abstract/Protocol/`.pyi` exemptions)
+- [x] `tests` (pytest + unittest paths, skip/skipif/xfail markers, assertion delta)
+- [x] `imports` (`ast` + resolution; relative, project-internal, third-party; `try/except ImportError` exempt)
+- [x] `scope` (token overlap; infra denylist; always info/low)
+- [x] Terminal + JSON reporters; exit codes
+- [x] Milestone: `vouch check --no-agent` useful on a Python repo
+- [x] Start `docs/CAUGHT.md` dogfood log
 
 ## Phase 3 — Transcript task (optional convenience)
 

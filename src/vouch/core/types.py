@@ -163,9 +163,19 @@ class ProjectAccess(BaseModel):
     files: dict[str, str] = Field(default_factory=dict)
     # Importable top-level names in the *target* repo's environment, not vouch's.
     # Empty when no environment could be discovered — the imports check then
-    # degrades to low confidence rather than flagging every real dependency.
+    # declines to judge third-party imports rather than flagging every real
+    # dependency of the project under review.
     installed_modules: set[str] = Field(default_factory=set)
     env_discovered: bool = False
+    # Project-internal modules: dotted name -> git-normalized path. Lets the
+    # imports check verify in-repo modules even with no environment at all.
+    module_files: dict[str, str] = Field(default_factory=dict)
+    # Dotted module name -> its top-level public names, for catching imports
+    # of things a real module doesn't actually define.
+    module_exports: dict[str, set[str]] = Field(default_factory=dict)
+    # Modules that re-export dynamically (star imports, __getattr__), where an
+    # absent name proves nothing.
+    opaque_modules: set[str] = Field(default_factory=set)
 
 
 class CheckContext(BaseModel):
