@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from conftest import make_context
 from fakes import FakeClient, Response, TextBlock, Usage, text_response, tool_response
 from vouch.agent.loop import AgentConfig, run_agent, run_loop
@@ -286,6 +288,49 @@ class TestFabricationGuard:
         client = FakeClient(text_response(payload))
         section = run_agent(ctx, tmp_path, client=client)
         assert [h.file for h in section.hunks] == ["src/app.py"]
+
+    def test_a_bracketed_range_is_normalized(self, tmp_path: Path):
+        """Observed live: the model echoed the prompt's brackets.
+
+        An un-normalized `[1-5]` costs the finding its line number and fails
+        to join onto `changes`, so the UI drops the classification tag.
+        """
+        ctx = context()
+        payload = verdict_for(ctx)
+        label = payload["hunks"][0]["range"]
+        payload["hunks"][0]["range"] = f"[{label}]"
+
+        section = run_agent(ctx, tmp_path, client=FakeClient(text_response(payload)))
+        assert [h.range for h in section.hunks] == [label]
+        assert (ctx.hunks[0].file, ctx.hunks[0].range) == (
+            section.hunks[0].file,
+            section.hunks[0].range,
+        )
+
+    @pytest.mark.parametrize("decorated", ["[1-2]", " 1-2 ", "(1-2)", "[1-2", "1-2]"])
+    def test_decoration_is_stripped(self, tmp_path: Path, decorated: str):
+        ctx = context()
+        payload = verdict_for(ctx)
+        payload["hunks"][0]["range"] = decorated
+        section = run_agent(ctx, tmp_path, client=FakeClient(text_response(payload)))
+        assert section.hunks[0].range == "1-2"
+
+    def test_a_normalized_range_restores_the_finding_line(self, tmp_path: Path):
+        ctx = context()
+        payload = verdict_for(ctx)
+        payload["hunks"][0]["range"] = f"[{payload['hunks'][0]['range']}]"
+        payload["hunks"][0]["classification"] = "unrequested"
+        section = run_agent(ctx, tmp_path, client=FakeClient(text_response(payload)))
+        (derived,) = [f for f in section.findings if f.code == "unrequested-change"]
+        assert derived.line == ctx.hunks[0].new_start
+
+    def test_the_prompt_does_not_wrap_the_range_in_brackets(self):
+        from vouch.agent.prompts import build_initial_prompt
+
+        ctx = context()
+        prompt = build_initial_prompt(ctx.task, ctx.hunks)
+        assert f"range={ctx.hunks[0].range}" in prompt
+        assert f"[{ctx.hunks[0].range}]" not in prompt
 
     def test_a_drifted_range_still_matches_on_file(self, tmp_path: Path):
         ctx = context()

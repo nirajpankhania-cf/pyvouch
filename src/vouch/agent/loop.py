@@ -298,17 +298,32 @@ def _extract_json(text: str) -> str | None:
     return candidate[start : end + 1]
 
 
+def _normalize_range(text: str) -> str:
+    """Undo the decoration the model picks up from the prompt.
+
+    Hunks are headed `### file [1-5] (added)`, and models sometimes echo the
+    brackets. An un-normalized `[1-5]` costs a line number in the report and,
+    worse, fails to join onto `changes` in the UI, so the classification tag
+    silently disappears.
+    """
+    return text.strip().strip("[]()").strip()
+
+
 def _reconcile(verdict: AgentVerdict, ctx: CheckContext) -> AgentVerdict:
-    """Drop classifications for hunks we never sent.
+    """Normalize ranges, then drop classifications for hunks we never sent.
 
     A model that invents a file is not evidence about the diff, and letting
     one through would put a fabricated path in the report.
     """
+    cleaned = [
+        item.model_copy(update={"range": _normalize_range(item.range)})
+        for item in verdict.hunks
+    ]
     known = {(hunk.file, hunk_range_label(hunk)) for hunk in ctx.hunks}
     known_files = {hunk.file for hunk in ctx.hunks}
-    kept = [item for item in verdict.hunks if (item.file, item.range) in known]
+    kept = [item for item in cleaned if (item.file, item.range) in known]
     if not kept:
         # Ranges drift more than paths; fall back to matching on file alone
         # rather than discarding an otherwise usable verdict.
-        kept = [item for item in verdict.hunks if item.file in known_files]
+        kept = [item for item in cleaned if item.file in known_files]
     return verdict.model_copy(update={"hunks": kept})

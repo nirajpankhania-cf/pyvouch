@@ -166,3 +166,31 @@ no secret in the payload.
 Two things worth keeping: the gate is by filename, which is a floor and not detection; and
 the hunk is withheld rather than dropped, because an unrequested `.env` is a finding worth
 having.
+
+## 2026-10-12 · `[1-5]` · the model echoed the prompt's own punctuation
+
+Found by running the live agent against a demo repo rather than a fake client. The verdict
+came back correct in substance but wrong in shape:
+
+```
+Unrequested hunks
+  tests/test_cart.py:[1-5] — Imports pytest only so a cart test can be skipped…
+```
+
+Hunks are headed `### file [1-5] (added)` in the prompt, and the model echoed the brackets
+into its `range` field. Two consequences, neither visible in that line:
+
+- `_range_start("[1-5]")` can't parse a number, so every derived `unrequested-change`
+  finding lost its line number.
+- `(file, range)` no longer matches anything in `changes`, so the workspace UI would have
+  silently shown those hunks with no classification tag. `_reconcile` only kept them at
+  all because it falls back to matching on file alone.
+
+**Fix:** normalize the range on parse, stop inviting the mistake by rendering `range=1-5`
+instead of `[1-5]`, and say "no brackets" in the schema instruction. Three layers, because
+the normalizer is the only one that survives a model that ignores instructions.
+
+The lesson is about test strategy, not parsing. Every agent test used a scripted fake that
+echoed `hunk_range_label()` perfectly, so the bug was unreachable offline — the fakes
+encoded my assumption that the model would do the obvious thing. Live runs are not
+optional for an LLM-shaped boundary.

@@ -222,7 +222,8 @@ def _verdict_shape(with_findings: bool) -> str:
         '  "summary": "<one or two sentences: overall, does the diff match the task? call out '
         'any unrequested changes>"\n'
         "}\n"
-        "Include one entry per hunk you were given, echoing its file and range."
+        "Include one entry per hunk you were given, echoing its file and range. "
+        'Give the range exactly as shown after "range=", with no brackets.'
     )
 
 
@@ -263,7 +264,9 @@ _SIGNS = {"add": "+", "del": "-", "context": " "}
 
 
 def _render_hunk(hunk: Hunk) -> str:
-    head = f"### {hunk.file} [{hunk_range_label(hunk)}] ({hunk.status})"
+    # `range=1-5` rather than `[1-5]`: brackets got echoed back into the
+    # verdict, and a decorated range fails to join onto the diff.
+    head = f"### {hunk.file} range={hunk_range_label(hunk)} ({hunk.status})"
     if holds_secrets(hunk.file):
         added = len(hunk.added_lines())
         removed = len(hunk.removed_lines())
