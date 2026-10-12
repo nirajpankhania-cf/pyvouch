@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import typer.main
 from typer.testing import CliRunner
 
 from vouch import __version__
@@ -35,10 +36,26 @@ class TestMetaCommands:
         assert "Usage" in result.stdout
         assert "check" in result.stdout
 
-    def test_check_help_lists_the_documented_flags(self):
+    def test_check_declares_the_documented_flags(self):
+        # Introspected, not scraped from --help: Rich wraps the help box to the
+        # terminal width, so asserting on rendered text fails on narrow CI.
+        command = typer.main.get_command(app).commands["check"]
+        declared = {opt for param in command.params for opt in param.opts}
+        assert declared == {
+            "--message",
+            "-m",
+            "--staged",
+            "--base",
+            "--json",
+            "--no-agent",
+            "--model",
+            "--save",
+        }
+
+    def test_check_help_renders_at_any_width(self, monkeypatch):
+        monkeypatch.setenv("COLUMNS", "40")
         result = runner.invoke(app, ["check", "--help"])
-        for flag in ("--message", "--staged", "--base", "--json", "--no-agent", "--model"):
-            assert flag in result.stdout
+        assert result.exit_code == 0
 
 
 class TestExitCodes:
