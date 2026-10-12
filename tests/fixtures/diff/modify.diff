@@ -1,0 +1,11 @@
+diff --git a/calc.py b/calc.py
+index b61df52..61ade03 100644
+--- a/calc.py
++++ b/calc.py
+@@ -1,5 +1,5 @@
+ def one():
+-    return 1
++    return 99
+ 
+ 
+ def two():

@@ -1,0 +1,19 @@
+diff --git a/long.txt b/long.txt
+index f696b4b..005ce1d 100644
+--- a/long.txt
++++ b/long.txt
+@@ -1,5 +1,5 @@
+ line1
+-line2
++LINE-TWO-CHANGED
+ line3
+ line4
+ line5
+@@ -15,6 +15,6 @@ line14
+ line15
+ line16
+ line17
+-line18
++LINE-EIGHTEEN-CHANGED
+ line19
+ line20

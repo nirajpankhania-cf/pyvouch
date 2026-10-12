@@ -1,0 +1,7 @@
+diff --git a/my file.py b/my file.py
+index bd4269f..c90ac6e 100644
+--- a/my file.py	
++++ b/my file.py	
+@@ -1 +1 @@
+-spaced
++spaced changed

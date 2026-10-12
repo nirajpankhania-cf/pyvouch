@@ -15,10 +15,12 @@ One phase ≈ focused session(s). End each phase with: tests green, decision not
 
 ## Phase 1 — Context layer (no LLM)
 
-- [ ] Diff modes: working tree, `--staged`, `--base` (three-dot / merge-base semantics)
-- [ ] Hunk model + fixtures from real git diffs
-- [ ] Task resolution: `-m` → `TASK.md` → prompt
-- [ ] Shared types: `Finding`, `Check`, `CheckContext`, verdict enum
+- [x] Diff modes: working tree, `--staged`, `--base` (three-dot / merge-base semantics)
+- [x] Hunk model + fixtures from real git diffs (10 fixtures incl. rename, binary, mode-only, no-newline, spaces-in-path)
+- [x] Hand-rolled unified diff parser; untracked files synthesized as `added`
+- [x] Task resolution: `-m` → `TASK.md` → transcript hook → prompt
+- [x] Shared types: `Finding`, `CheckContext`, `ProjectAccess`, verdict enum
+- [x] Target-environment discovery for imports (venv → declared deps → `env_discovered=False`)
 
 ## Phase 2 — Pass 1 static checks (Python)
 

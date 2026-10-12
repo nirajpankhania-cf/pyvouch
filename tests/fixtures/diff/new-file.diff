@@ -1,0 +1,11 @@
+diff --git a/added.py b/added.py
+new file mode 100644
+index 0000000..6d4b466
+--- /dev/null
++++ b/added.py
+@@ -0,0 +1,5 @@
++import os
++
++
++def fresh():
++    return os.getcwd()
