@@ -6,7 +6,14 @@ import { FindingsPanel } from "./components/FindingsPanel";
 import { HistoryList } from "./components/HistoryList";
 import { RequestForm } from "./components/RequestForm";
 import { VerdictHeader } from "./components/VerdictHeader";
-import type { AgentStatus, Health, ReviewRequest, RunSummary, VouchReport } from "./types";
+import type {
+  AgentStatus,
+  Health,
+  PromptItem,
+  ReviewRequest,
+  RunSummary,
+  VouchReport,
+} from "./types";
 
 interface Opened {
   id: string | null;
@@ -20,6 +27,7 @@ export function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [total, setTotal] = useState(0);
+  const [prompts, setPrompts] = useState<PromptItem[]>([]);
   const [opened, setOpened] = useState<Opened | null>(null);
   const [target, setTarget] = useState<Target | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,6 +45,12 @@ export function App() {
 
   useEffect(() => {
     api.health().then(setHealth).catch((cause) => setError(messageOf(cause)));
+    // Transcripts are a convenience; failing to read them is not an error
+    // worth showing, since you can always type the task.
+    api
+      .listPrompts()
+      .then((response) => setPrompts(response.prompts))
+      .catch(() => setPrompts([]));
     void refreshHistory();
   }, [refreshHistory]);
 
@@ -90,7 +104,7 @@ export function App() {
           You state the task. It says whether the diff matches — not whether it is good code.
         </p>
 
-        <RequestForm busy={busy} health={health} onSubmit={submit} />
+        <RequestForm busy={busy} health={health} prompts={prompts} onSubmit={submit} />
 
         <h2 className="section-title">History</h2>
         <HistoryList

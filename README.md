@@ -101,7 +101,7 @@ Check it:
 
 ```bash
 vouch version          # 0.1.0
-pytest                 # 471 passed
+pytest                 # 530 passed
 ruff check .
 ```
 
@@ -197,10 +197,36 @@ vouch list-codes       Print every issue code and what it means
 vouch version
 ```
 
-The task is resolved in this order: `-m`, then a `TASK.md` file, then an interactive
-prompt. (A Claude Code transcript loader slots in before the prompt; that is Phase 3 and
-not built yet.) A task vouch inferred rather than was told is always echoed back, never
-silently judged.
+The task is resolved in this order:
+
+1. `-m "…"`
+2. a `TASK.md` file in the repo root
+3. **the last thing you typed to a coding agent** (see below)
+4. an interactive prompt
+
+A task vouch inferred rather than was told is never silently judged: on a terminal it is
+shown and confirmed, and in every report it is labelled `transcript` rather than `flag`.
+
+#### Reading the task from your agent
+
+You already typed the task once, to the agent. Retyping it for vouch invites you to
+describe what the diff *does* instead of what you *asked for*, which is the one thing
+vouch exists to compare. So it reads your prompts back from the agent's own transcript:
+
+| Tool | Where vouch looks |
+|---|---|
+| Cursor CLI | `~/.cursor/projects/<encoded-cwd>/agent-transcripts/**/*.jsonl` |
+| Claude Code | `~/.claude/projects/-<encoded-cwd>/*.jsonl` |
+
+Both are read-only and keyed by the repo you are in, so you only ever see prompts from
+sessions about this project. Acknowledgements ("ok", "yes do it", "thanks") are filtered
+out, because they are replies to the agent rather than statements of intent. Parsing is
+best-effort by design: a missing, moved, or reformatted transcript is not an error — you
+just get the interactive prompt instead. Pass `--message` to skip the lookup entirely.
+
+In the workspace UI the same prompts appear behind **Use something you asked an agent**,
+served by `GET /prompts`. There they are offered, not applied: you pick one and it fills
+the task box, so the thing being verified is always something you chose.
 
 In CI:
 
@@ -217,6 +243,7 @@ Default port **8741**. Same report schema as `--json`.
 | `POST /reviews` | Run the pipeline. `201` with the full report plus an `id`. |
 | `GET /reviews` | History, newest first, summary fields only. `?limit=&offset=` |
 | `GET /reviews/{id}` | Reopen a stored report. |
+| `GET /prompts` | Recent prompts typed to a coding agent in this repo. `?limit=` |
 | `GET /health` | Liveness, version, repo root, whether a key is present. |
 
 ```bash
@@ -235,6 +262,45 @@ code. Clicking a finding scrolls to the hunk containing its line. The header car
 task, verdict, token cost, and **Copy JSON**.
 
 The UI only ever calls the API. No check logic is reimplemented in TypeScript.
+
+#### A history to look at
+
+The history panel is empty until runs exist, which makes a fresh checkout an awkward
+thing to present. `scripts/seed_demo.py` fixes that without faking anything: it builds a
+scratch repo at `/tmp/vouch-demo-seed`, applies five diffs a careless agent might
+plausibly produce, and runs the **real** pipeline over each one.
+
+```bash
+source .venv/bin/activate
+python scripts/seed_demo.py            # Pass 1 only — free, no API key
+python scripts/seed_demo.py --agent    # both passes — ~35s, ~37k input tokens
+```
+
+Every row it writes is a genuine report, so the classifications and costs in the UI are
+real. The five scenarios are chosen to cover the verdict space:
+
+| Scenario | Verdict | What it shows |
+|---|---|---|
+| Retry, done properly | `clean` | `requested` plus two `supporting` hunks |
+| Retry, importing a module nobody wrote | `fail` | `hallucinated-import`, a stub, a disabled test |
+| A quantity argument, plus an unrelated file | `review` | scope creep with nothing actually broken |
+| A test file deleted instead of updated | `fail` | `removed-test` and `unintended-removal` |
+| Docstrings and a helper, but not the feature | `review` | `request-unfulfilled` — the Pass 2 catch Pass 1 cannot make |
+
+It leaves the second scenario's diff uncommitted, so hitting **Request review** during a
+demo immediately has something to find. `--reset` clears existing history first, `--db`
+writes elsewhere, and `--leave 0` leaves the tree clean.
+
+Then serve it:
+
+```bash
+VOUCH_REPO_ROOT=/tmp/vouch-demo-seed uvicorn vouch.api.app:app --port 8741
+```
+
+> History is stored per-database, not per-repo, so runs seeded from the demo repo show up
+> whichever repo the API is pointed at. Prompts are the opposite: `GET /prompts` is keyed
+> to `VOUCH_REPO_ROOT`, so point the API at a repo you have actually used an agent in if
+> you want the picker populated.
 
 ---
 
@@ -392,6 +458,7 @@ src/vouch/
   api/         HTTP
   cli.py       terminal entry point
 frontend/      React workspace
+scripts/       demo seeding; not part of the package
 ```
 
 Four rules shape the whole layout:
@@ -419,7 +486,8 @@ Four rules shape the whole layout:
 |---|---|
 | `gitcmd.py` | The only module that invokes git. Every call is read-only and uses `core.quotepath=false` so non-ASCII paths come back usable. |
 | `diff.py` | Hand-written unified-diff parser over git's porcelain output — renames, binary files, mode-only changes, omitted `@@` counts, missing trailing newlines, paths with spaces. In working-tree mode, untracked files are synthesized as added hunks, because a file an agent just wrote is exactly what vouch exists to inspect. `--base` uses three-dot merge-base semantics, matching what a pull request shows. |
-| `task.py` | Resolves the task: `-m`, then `TASK.md`, then an injectable transcript loader (none shipped yet — Phase 3), then an interactive prompt. An inferred task is always echoed. |
+| `task.py` | Resolves the task: `-m`, then `TASK.md`, then a transcript loader, then an interactive prompt. The loader is injectable so tests never touch your home directory. An inferred task is confirmed on a TTY and always labelled `transcript` in the report. |
+| `transcripts.py` | Reads the prompts you typed to Cursor CLI or Claude Code out of their JSONL session logs, newest first. Encodes the repo path the way each tool does to find its own session directory, unwraps Cursor's `<user_query>` tags, strips injected context, and drops acknowledgements like "ok" or "yes do it" that are replies rather than intent. Parsing is total: malformed JSON, a renamed directory or a format change all come back as "no prompts", never an exception. |
 | `project.py` | The largest and fiddliest module. Discovers the **target** repo's virtualenv (never vouch's own), indexes its importable modules and their exported names, and maps each directory to its importable siblings. If no environment can be found it says so, and the imports check then declines to judge third-party names rather than call a real dependency a hallucination. |
 
 ### `src/vouch/checks/` — Pass 1
@@ -462,7 +530,7 @@ Each check is a pure function. `registry.py` lists them; nothing else knows the 
 | `src/types.ts` | The wire format, mirroring the pydantic models. Python is authoritative. |
 | `src/api.ts` | The only module that talks to the API. |
 | `src/App.tsx` | Shell and state: health, history, the open run, the jump target. |
-| `src/components/RequestForm.tsx` | Task, diff mode, Pass-1-only toggle. |
+| `src/components/RequestForm.tsx` | Task, diff mode, Pass-1-only toggle, and the picker that fills the task from a recent agent prompt. |
 | `src/components/HistoryList.tsx` | Past runs, newest first. |
 | `src/components/VerdictHeader.tsx` | Verdict, task, counts, cost, Copy JSON. |
 | `src/components/ChangePanel.tsx` | The diff, with each hunk's classification tag. |
@@ -489,7 +557,7 @@ A `vouch check` run, end to end:
 ```
 cli.py
   └─ core/pipeline.run_pipeline
-       ├─ context/task.resolve_task ─────────── -m → TASK.md → prompt
+       ├─ context/task.resolve_task ─────────── -m → TASK.md → transcripts → prompt
        ├─ context/diff.get_hunks ─────────────── context/gitcmd (read-only git)
        │                                         └─ list[Hunk]
        ├─ context/project.build_project_access ─ target venv, module index, siblings
@@ -577,7 +645,7 @@ hunk classifications, so there is exactly one source for it.
 
 ```bash
 source .venv/bin/activate
-pytest                  # 471 tests
+pytest                  # 530 tests
 ruff check .
 cd frontend && npm test && npm run typecheck && npm run build
 ```

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -63,6 +64,63 @@ class TestHealth:
         assert "/reviews/{run_id}" in schema["paths"]
 
 
+class TestPrompts:
+    """Recent agent prompts are offered to the UI, never applied silently."""
+
+    @pytest.fixture
+    def with_prompts(self, api_repo: Path, tmp_path: Path, monkeypatch):
+        from vouch.context import transcripts
+
+        monkeypatch.setattr(transcripts, "CURSOR_ROOT", tmp_path / "cursor")
+        monkeypatch.setattr(transcripts, "CLAUDE_ROOT", tmp_path / "claude")
+        encoded = transcripts.encode_cursor_dir(api_repo)
+        directory = tmp_path / "cursor" / encoded / "agent-transcripts" / "s"
+        directory.mkdir(parents=True)
+        records = [
+            {
+                "role": "user",
+                "message": {
+                    "content": [{"type": "text", "text": f"<user_query>\n{text}\n</user_query>"}]
+                },
+            }
+            for text in ("add a worker that processes items", "yes", "now add retry and backoff")
+        ]
+        (directory / "s.jsonl").write_text(
+            "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+        )
+
+    def test_empty_when_there_is_no_transcript(self, client):
+        assert client.get("/prompts").json() == {"prompts": []}
+
+    def test_lists_prompts_newest_first(self, client, with_prompts):
+        prompts = client.get("/prompts").json()["prompts"]
+        assert [p["text"] for p in prompts] == [
+            "now add retry and backoff",
+            "add a worker that processes items",
+        ]
+
+    def test_acknowledgements_are_not_offered(self, client, with_prompts):
+        texts = [p["text"] for p in client.get("/prompts").json()["prompts"]]
+        assert "yes" not in texts
+
+    def test_each_prompt_carries_a_summary_and_tool(self, client, with_prompts):
+        (first, _) = client.get("/prompts").json()["prompts"]
+        assert first["summary"] == "now add retry and backoff"
+        assert first["tool"] == "cursor"
+        assert first["session"] == "s"
+
+    def test_limit_is_bounded(self, client):
+        assert client.get("/prompts", params={"limit": 0}).status_code == 422
+        assert client.get("/prompts", params={"limit": 999}).status_code == 422
+
+    def test_a_prompt_can_be_posted_straight_back_as_a_task(self, client, with_prompts):
+        prompt = client.get("/prompts").json()["prompts"][0]
+        created = client.post("/reviews", json={"task": prompt["text"], "noAgent": True})
+        assert created.status_code == 201
+        # Still 'api': the user chose it, so it is stated, not inferred.
+        assert created.json()["report"]["task"]["source"] == "api"
+
+
 class TestServingTheBuiltUi:
     """A built image serves the workspace and the API on one port."""
 
@@ -112,9 +170,10 @@ class TestOpenApiMatchesSpec:
 
     def test_only_the_documented_routes_exist(self, client):
         paths = client.get("/openapi.json").json()["paths"]
-        assert set(paths) == {"/health", "/reviews", "/reviews/{run_id}"}
+        assert set(paths) == {"/health", "/prompts", "/reviews", "/reviews/{run_id}"}
         assert set(paths["/reviews"]) == {"get", "post"}
         assert set(paths["/reviews/{run_id}"]) == {"get"}
+        assert set(paths["/prompts"]) == {"get"}
 
     def test_request_body_fields_are_camel_case(self, client):
         schema = client.get("/openapi.json").json()

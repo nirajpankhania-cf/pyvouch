@@ -194,3 +194,44 @@ The lesson is about test strategy, not parsing. Every agent test used a scripted
 echoed `hunk_range_label()` perfectly, so the bug was unreachable offline — the fakes
 encoded my assumption that the model would do the obvious thing. Live runs are not
 optional for an LLM-shaped boundary.
+---
+
+## It caught scope creep in the change that added the demo seeder
+
+Running vouch on the diff that built `scripts/seed_demo.py` and the transcript loader:
+
+```
+Pass 2 — intent
+  warn  unrequested-change         docs/PLAN.md:68
+        Ticking off `vouch list-codes` and the README as done in Phase 7 has
+        nothing to do with transcripts or seeding history; only the seed_demo
+        line relates to the task.
+```
+
+It is right. While editing `docs/PLAN.md` to tick the Phase 3 transcript items, I also
+ticked two Phase 7 boxes that were finished earlier and never marked. The statements are
+true, but they are not what the task asked for, and a reviewer reading this diff for the
+transcript loader would have had to work out why the plan's Phase 7 moved.
+
+This is the whole product thesis in one finding: nothing here is a bug, no linter would
+say a word, and `git diff` shows it without comment. Only something holding the task can
+tell you it does not belong.
+
+## A false positive worth keeping: TODOs in demo fixtures
+
+The same run:
+
+```
+  warn  placeholder-code           scripts/seed_demo.py:207
+        TODO/FIXME comment added: "# TODO: implement once the cache service lands"
+```
+
+The seeder's scenarios are Python source held in string literals — a stub with a TODO is
+*deliberately* one of the diffs the demo reviews. The check sees an added line containing
+a TODO marker and cannot tell data from code.
+
+Not fixed, on purpose. Ignoring markers inside string literals would also silence a TODO
+in a docstring, which is a real one, and the only file in the repo that trips this is the
+fixture generator. A `warn` the author can read and dismiss is a better trade than a
+blind spot, and `placeholders.py` already carries the exemptions that are worth the
+complexity (abstract methods, `Protocol` bodies, `.pyi` stubs, quoted markers in prose).

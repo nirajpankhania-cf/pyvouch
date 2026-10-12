@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -82,3 +83,57 @@ class TestFailureModes:
         monkeypatch.setattr("sys.stdin.isatty", lambda: False)
         with pytest.raises(TaskError):
             resolve_task(tmp_path, prompt=True)
+
+
+class TestShippedTranscriptLoader:
+    """The default loader reads real agent transcripts, and is opt-outable."""
+
+    @pytest.fixture
+    def transcript(self, tmp_path: Path, monkeypatch):
+        from vouch.context import transcripts
+
+        monkeypatch.setattr(transcripts, "CURSOR_ROOT", tmp_path / "cursor")
+        monkeypatch.setattr(transcripts, "CLAUDE_ROOT", tmp_path / "claude")
+
+        def write(text: str, repo: Path) -> None:
+            directory = (
+                tmp_path
+                / "cursor"
+                / transcripts.encode_cursor_dir(repo)
+                / "agent-transcripts"
+                / "s"
+            )
+            directory.mkdir(parents=True, exist_ok=True)
+            record = {
+                "role": "user",
+                "message": {
+                    "content": [{"type": "text", "text": f"<user_query>\n{text}\n</user_query>"}]
+                },
+            }
+            (directory / "s.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+        return write
+
+    def test_used_when_nothing_else_is_given(self, tmp_path: Path, transcript):
+        transcript("add retry to the pricing client", tmp_path)
+        task = resolve_task(tmp_path, prompt=False)
+        assert (task.text, task.source) == ("add retry to the pricing client", "transcript")
+
+    def test_a_flag_still_wins(self, tmp_path: Path, transcript):
+        transcript("add retry to the pricing client", tmp_path)
+        task = resolve_task(tmp_path, "the stated task", prompt=False)
+        assert (task.text, task.source) == ("the stated task", "flag")
+
+    def test_task_file_still_wins(self, tmp_path: Path, transcript):
+        transcript("add retry to the pricing client", tmp_path)
+        (tmp_path / "TASK.md").write_text("from the file", encoding="utf-8")
+        assert resolve_task(tmp_path, prompt=False).source == "taskfile"
+
+    def test_opting_out_skips_it(self, tmp_path: Path, transcript):
+        transcript("add retry to the pricing client", tmp_path)
+        with pytest.raises(TaskError):
+            resolve_task(tmp_path, prompt=False, use_transcript=False)
+
+    def test_no_transcript_still_raises(self, tmp_path: Path, transcript):
+        with pytest.raises(TaskError):
+            resolve_task(tmp_path, prompt=False)

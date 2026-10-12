@@ -18,6 +18,8 @@ from fastapi.staticfiles import StaticFiles
 from vouch import __version__
 from vouch.api.schemas import (
     HealthResponse,
+    PromptItem,
+    PromptListResponse,
     ReviewListResponse,
     ReviewRequest,
     ReviewResponse,
@@ -25,6 +27,7 @@ from vouch.api.schemas import (
 from vouch.context.diff import DiffError, DiffMode
 from vouch.context.gitcmd import GitError
 from vouch.context.task import TaskError
+from vouch.context.transcripts import MAX_PROMPTS, recent_prompts
 from vouch.core.pipeline import CheckCrashError, PipelineOptions, run_pipeline
 from vouch.core.types import TaskInfo
 from vouch.envfile import load_env_file
@@ -80,6 +83,22 @@ def health() -> HealthResponse:
         version=__version__,
         repo_root=repo_root(),
         agent_available=bool(os.environ.get("ANTHROPIC_API_KEY")),
+    )
+
+
+@app.get("/prompts", response_model=PromptListResponse)
+def list_prompts(limit: int = Query(default=MAX_PROMPTS, ge=1, le=50)) -> PromptListResponse:
+    """Recent prompts typed to a coding agent in the repo under review.
+
+    Offered rather than applied: the UI shows them so the task can be picked
+    instead of retyped, but the user still chooses which one.
+    """
+    found = recent_prompts(repo_root(), limit=limit)
+    return PromptListResponse(
+        prompts=[
+            PromptItem(text=p.text, summary=p.summary, tool=p.tool, session=p.session)
+            for p in found
+        ]
     )
 
 

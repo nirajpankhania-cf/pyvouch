@@ -113,6 +113,17 @@ export interface ReviewListResponse {
   total: number;
 }
 
+export interface PromptItem {
+  text: string;
+  summary: string;
+  tool: string;
+  session: string;
+}
+
+export interface PromptListResponse {
+  prompts: PromptItem[];
+}
+
 export interface Health {
   status: string;
   version: string;

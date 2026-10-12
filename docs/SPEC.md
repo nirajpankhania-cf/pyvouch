@@ -40,10 +40,16 @@ Exit codes (API): `0` clean · `1` findings · `2` tool error.
 
 1. `-m` / API-body `task`
 2. `TASK.md` (gitignored scratch)
-3. Transcript loader (best-effort; Claude Code JSONL under `~/.claude/projects/<encoded-cwd>/` first)
+3. Transcript loader (best-effort). Cursor CLI JSONL under
+   `~/.cursor/projects/<encoded-cwd>/agent-transcripts/`, and Claude Code JSONL under
+   `~/.claude/projects/<encoded-cwd>/`. Acknowledgements ("yes", "go on") are not tasks
+   and are filtered out. Parsing is total: a reshaped or unreadable transcript yields no
+   prompt rather than an error, because these are other tools' private files.
 4. Interactive prompt (TTY CLI only)
 
-If a transcript task is used: always echo it; confirm on TTY; never silent.
+If a transcript task is used: always echo it; confirm on TTY; never silent. The API never
+infers a task — it has no TTY to confirm with — so it exposes `GET /prompts` and lets the
+caller choose.
 
 ## Pass 1 — Static (zero tokens)
 
@@ -168,6 +174,7 @@ Default port **8741**. All bodies and responses use the same camelCase wire keys
 | `POST /reviews` | Run the pipeline against the configured repo root. `201` + full report. |
 | `GET /reviews` | History, newest first. Summary fields only. |
 | `GET /reviews/{id}` | The stored report, byte-identical to what `POST` returned. |
+| `GET /prompts` | Recent prompts typed to a coding agent in the repo under review. |
 | `GET /health` | Liveness, version, repo root, whether an API key is present. |
 
 `POST /reviews` body: `{ task, mode: working|staged|base, baseRef?, noAgent?, model? }`.
@@ -177,6 +184,10 @@ alongside `report`.
 
 `GET /reviews` takes `limit` (1–200, default 50) and `offset`, and returns
 `{ runs, total }` where `total` counts all stored runs, not just the page.
+
+`GET /prompts` returns `{ prompts: [{ text, summary, tool, session }] }`, newest first.
+These are *offered*, never applied: the caller still chooses which prompt is the task, so
+a review is never run against a guess nobody approved.
 
 Status codes: `400` the repo or ref is unusable (not a git repo, bad base ref) ·
 `422` the request body is invalid · `404` unknown run id · `500` a check crashed.

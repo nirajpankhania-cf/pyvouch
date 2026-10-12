@@ -42,6 +42,8 @@ class PipelineOptions:
     # Pre-resolved task, used by the API where there is no TTY or TASK.md.
     task: TaskInfo | None = None
     prompt: bool = True
+    # False skips reading the task from an agent transcript.
+    use_transcript: bool = True
     enabled_checks: tuple[str, ...] | None = None
     # Injected Anthropic client; tests script a fake instead of calling out.
     agent_client: Any = None
@@ -60,7 +62,9 @@ def run_pipeline(opts: PipelineOptions) -> PipelineResult:
     cwd = opts.cwd or "."
     root = repo_root(cwd) if is_inside_repo(cwd) else str(Path(cwd).resolve())
 
-    task = opts.task or resolve_task(root, opts.message, prompt=opts.prompt)
+    task = opts.task or resolve_task(
+        root, opts.message, prompt=opts.prompt, use_transcript=opts.use_transcript
+    )
     hunks = get_hunks(opts.mode, root)
     context = CheckContext(
         hunks=hunks,

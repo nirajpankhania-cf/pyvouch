@@ -168,6 +168,47 @@ button.ghost:hover {
   border-color: var(--dim);
 }
 
+button.ghost.wide {
+  width: 100%;
+  text-align: left;
+}
+
+.prompt-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.prompt-item {
+  width: 100%;
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 9px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.prompt-item:hover {
+  border-color: var(--accent);
+}
+.prompt-text {
+  display: block;
+}
+.prompt-meta {
+  color: var(--dim);
+  font-size: 10px;
+}
+
 /* --- history -------------------------------------------------------------- */
 
 .history {

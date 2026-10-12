@@ -2,6 +2,7 @@
 
 import type {
   Health,
+  PromptListResponse,
   ReviewListResponse,
   ReviewRequest,
   ReviewResponse,
@@ -60,6 +61,8 @@ async function detailOf(response: Response): Promise<string> {
 
 export const api = {
   health: () => request<Health>("/health"),
+
+  listPrompts: () => request<PromptListResponse>("/prompts"),
 
   createReview: (body: ReviewRequest) =>
     request<ReviewResponse>("/reviews", { method: "POST", body: JSON.stringify(body) }),

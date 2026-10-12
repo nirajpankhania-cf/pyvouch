@@ -39,6 +39,19 @@ class ReviewListResponse(WireModel):
     total: int
 
 
+class PromptItem(WireModel):
+    """Something the user typed to a coding agent, offered as a task."""
+
+    text: str
+    summary: str
+    tool: str
+    session: str
+
+
+class PromptListResponse(WireModel):
+    prompts: list[PromptItem]
+
+
 class HealthResponse(WireModel):
     status: str
     version: str

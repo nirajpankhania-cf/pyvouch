@@ -1,10 +1,11 @@
 import { useState } from "react";
 
-import type { DiffModeName, Health, ReviewRequest } from "../types";
+import type { DiffModeName, Health, PromptItem, ReviewRequest } from "../types";
 
 interface Props {
   busy: boolean;
   health: Health | null;
+  prompts: PromptItem[];
   onSubmit: (body: ReviewRequest) => void;
 }
 
@@ -14,11 +15,12 @@ const MODES: { value: DiffModeName; label: string; hint: string }[] = [
   { value: "base", label: "Against a ref", hint: "Merge-base diff, like a pull request." },
 ];
 
-export function RequestForm({ busy, health, onSubmit }: Props) {
+export function RequestForm({ busy, health, prompts, onSubmit }: Props) {
   const [task, setTask] = useState("");
   const [mode, setMode] = useState<DiffModeName>("working");
   const [baseRef, setBaseRef] = useState("main");
   const [noAgent, setNoAgent] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   const keyMissing = health !== null && !health.agentAvailable;
   const ready = task.trim().length > 0 && !busy && (mode !== "base" || baseRef.trim().length > 0);
@@ -46,6 +48,45 @@ export function RequestForm({ busy, health, onSubmit }: Props) {
           disabled={busy}
         />
       </label>
+
+      {prompts.length > 0 && (
+        <div className="field">
+          <button
+            type="button"
+            className="ghost wide"
+            onClick={() => setPicking(!picking)}
+            disabled={busy}
+          >
+            {picking ? "Hide" : `Use something you asked an agent (${prompts.length})`}
+          </button>
+
+          {picking && (
+            <ul className="prompt-list">
+              {prompts.map((prompt, index) => (
+                <li key={`${prompt.session}-${index}`}>
+                  <button
+                    type="button"
+                    className="prompt-item"
+                    onClick={() => {
+                      setTask(prompt.text);
+                      setPicking(false);
+                    }}
+                  >
+                    <span className="prompt-text">{prompt.summary}</span>
+                    <span className="prompt-meta mono">{prompt.tool}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {picking && (
+            <span className="hint">
+              Newest first. Picked, not applied — vouch never judges a task you did not
+              choose.
+            </span>
+          )}
+        </div>
+      )}
 
       <label className="field">
         <span className="field-label">Diff</span>

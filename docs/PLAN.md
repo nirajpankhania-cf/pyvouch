@@ -34,9 +34,10 @@ One phase ≈ focused session(s). End each phase with: tests green, decision not
 
 ## Phase 3 — Transcript task (optional convenience)
 
-- [ ] Claude Code JSONL loader (best-effort, never throw)
-- [ ] Confirm/echo UX; non-TTY safe behavior
-- [ ] Leave hooks for Cursor/Codex loaders later
+- [x] Cursor CLI + Claude Code JSONL loaders (best-effort, never throw)
+- [x] Confirm/echo UX; non-TTY safe behavior
+- [x] `GET /prompts` + UI picker, so the API surface offers rather than guesses
+- [ ] Codex loader (same shape; add when its transcript layout is known)
 
 ## Phase 4 — Pass 2 agentic
 
@@ -67,8 +68,9 @@ One phase ≈ focused session(s). End each phase with: tests green, decision not
 ## Phase 7 — Polish
 
 - [ ] `vouch init` + config file
-- [ ] `vouch list-codes`
-- [ ] README: problem → demo → install → architecture
+- [x] `vouch list-codes`
+- [x] README: problem → demo → install → architecture
+- [x] `scripts/seed_demo.py` — real runs, so the workspace has a history to show
 - [ ] Ignore globs; per-check toggles
 - [ ] Friendly errors (not-a-repo, bad base)
 
