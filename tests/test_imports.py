@@ -200,6 +200,31 @@ class TestRelativeImports:
         assert finding.severity == "error"
 
 
+class TestSiblingModules:
+    def test_sibling_module_resolves(self):
+        # pytest puts a test directory on sys.path, so "from conftest import x"
+        # inside tests/ is valid even though tests/ is not a package.
+        ctx = make_context(
+            sources={"tests/test_a.py": "from conftest import helper\n"},
+            installed={"os"},
+        )
+        ctx.project.sibling_modules = {"tests": {"conftest", "test_a"}}
+        assert imports.run(ctx) == []
+
+    def test_sibling_in_a_different_directory_does_not_resolve(self):
+        ctx = make_context(
+            sources={"src/app.py": "from conftest import helper\n"},
+            installed={"os"},
+        )
+        ctx.project.sibling_modules = {"tests": {"conftest"}}
+        assert len(imports.run(ctx)) == 1
+
+    def test_root_level_sibling_resolves(self):
+        ctx = make_context(sources={"script.py": "import helper\n"}, installed={"os"})
+        ctx.project.sibling_modules = {"": {"helper", "script"}}
+        assert imports.run(ctx) == []
+
+
 class TestScopeOfTheCheck:
     def test_only_added_imports_are_judged(self):
         source = "import ghost_pkg\nimport os\n"

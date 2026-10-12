@@ -40,11 +40,13 @@ One phase ≈ focused session(s). End each phase with: tests green, decision not
 
 ## Phase 4 — Pass 2 agentic
 
-- [ ] Read-only tools + jail
-- [ ] Hand-rolled loop, budget, pydantic-validated verdict
-- [ ] Classification rubric + issue codes
-- [ ] Cost in report; no-key degradation
-- [ ] Default model `claude-opus-5-5`
+- [x] Read-only tools + jail (`read_file`, `read_git_log`, `list_dir`, `search`; never raise)
+- [x] Hand-rolled loop, budget, pydantic-validated verdict (one retry, then degrade)
+- [x] Classification rubric + per-code issue guides
+- [x] Cost in report; no-key degradation; injected client for tests
+- [x] Default model `claude-opus-5-5`
+- [x] Fabrication guard: classifications for hunks we never sent are dropped
+- [ ] Verify against the live API (needs `ANTHROPIC_API_KEY`)
 
 ## Phase 5 — Store + API
 

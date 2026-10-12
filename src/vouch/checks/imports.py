@@ -185,6 +185,12 @@ def _check_absolute(ref: _Import, file: str, project: ProjectAccess) -> list[Fin
     if top_level in project.installed_modules:
         return []
 
+    # A module sitting next to the importing file: Python and pytest both put
+    # that directory on sys.path.
+    directory = file.rsplit("/", 1)[0] if "/" in file else ""
+    if top_level in project.sibling_modules.get(directory, set()):
+        return []
+
     if not project.env_discovered:
         # No environment to check against. Saying nothing beats guessing.
         return []

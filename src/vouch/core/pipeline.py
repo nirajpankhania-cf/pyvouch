@@ -9,6 +9,7 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from vouch.checks.registry import ALL_CHECKS
 from vouch.context.diff import DiffMode, get_hunks
@@ -42,6 +43,8 @@ class PipelineOptions:
     task: TaskInfo | None = None
     prompt: bool = True
     enabled_checks: tuple[str, ...] | None = None
+    # Injected Anthropic client; tests script a fake instead of calling out.
+    agent_client: Any = None
 
 
 @dataclass
@@ -112,15 +115,18 @@ def _maybe_run_agent(
         return AgentSection(ran=False), "disabled", None
     if not context.hunks:
         return AgentSection(ran=False), "no-hunks", None
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if opts.agent_client is None and not os.environ.get("ANTHROPIC_API_KEY"):
         return AgentSection(ran=False), "no-api-key", None
 
     try:
         from vouch.agent.loop import run_agent
-    except ImportError:
-        return AgentSection(ran=False), "no-api-key", None
 
-    try:
-        return run_agent(context, model=opts.model), "ran", None
+        section = run_agent(
+            context,
+            context.project.repo_root,
+            model=opts.model,
+            client=opts.agent_client,
+        )
     except Exception as cause:
         return AgentSection(ran=False), "error", str(cause)
+    return section, "ran", None

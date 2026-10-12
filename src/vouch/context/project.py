@@ -65,7 +65,24 @@ def build_project_access(hunks: list[Hunk], cwd: str | Path) -> ProjectAccess:
         module_files=index.files,
         module_exports=index.exports,
         opaque_modules=index.opaque,
+        sibling_modules=_sibling_modules(root),
     )
+
+
+def _sibling_modules(root: Path) -> dict[str, set[str]]:
+    """Modules importable as siblings, keyed by the directory holding them.
+
+    Python puts a script's own directory on ``sys.path``, and pytest does the
+    same for test directories, so ``from conftest import ...`` inside
+    ``tests/`` resolves even though ``tests`` is not a package.
+    """
+    result: dict[str, set[str]] = {}
+    for path in _walk_python(root):
+        parent = path.parent
+        key = parent.relative_to(root).as_posix() if parent != root else ""
+        if path.stem.isidentifier():
+            result.setdefault(key, set()).add(path.stem)
+    return result
 
 
 # Directories never worth walking for the module index.

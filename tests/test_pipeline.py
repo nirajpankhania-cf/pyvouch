@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
+from fakes import FakeClient, text_response
+from vouch.agent.prompts import hunk_range_label
 from vouch.checks.registry import ALL_CHECKS, CHECK_NAMES, Check
-from vouch.context.diff import DiffMode
+from vouch.context.diff import DiffMode, get_hunks
 from vouch.context.task import TaskError
 from vouch.core.pipeline import CheckCrashError, PipelineOptions, run_pipeline
 from vouch.core.types import ALL_ISSUE_CODES, CODE_MEANINGS, TaskInfo
@@ -20,6 +22,7 @@ def run(repo: Path, task: str = "do the thing", **kwargs):
         task=TaskInfo(text=task, source="flag"),
         cwd=str(repo),
         agent=kwargs.pop("agent", False),
+        agent_client=kwargs.pop("agent_client", None),
         prompt=False,
         **kwargs,
     )
@@ -123,6 +126,97 @@ class TestAgentStatus:
     def test_agent_section_omits_fields_when_not_run(self, git_repo: Path):
         wire = run(git_repo).report.to_json_dict()
         assert wire["agent"] == {"ran": False}
+
+
+class TestBothPassesTogether:
+    def test_agent_classifications_and_pass_1_share_one_report(self, git_repo: Path):
+        (git_repo / "worker.py").write_text("def f():\n    pass\n", encoding="utf-8")
+        hunks = get_hunks(DiffMode.working(), git_repo)
+        payload = {
+            "hunks": [
+                {
+                    "file": h.file,
+                    "range": hunk_range_label(h),
+                    "classification": "unrequested",
+                    "reason": "unrelated to the task",
+                }
+                for h in hunks
+            ],
+            "summary": "the diff does not match the task",
+        }
+        result = run(
+            git_repo,
+            task="update the README",
+            agent=True,
+            agent_client=FakeClient(text_response(payload)),
+        )
+        assert result.agent_status == "ran"
+        assert result.report.agent.ran is True
+        # Pass 1 found the stub; Pass 2 called the hunk scope creep.
+        assert any(f.code == "placeholder-code" for f in result.report.deterministic)
+        assert any(f.code == "unrequested-change" for f in result.report.agent.findings)
+        assert result.report.verdict == "review"
+
+    def test_agent_cannot_escalate_a_clean_pass_1_to_fail(self, git_repo: Path):
+        (git_repo / "notes.md").write_text("some prose\n", encoding="utf-8")
+        hunks = get_hunks(DiffMode.working(), git_repo)
+        payload = {
+            "hunks": [
+                {
+                    "file": h.file,
+                    "range": hunk_range_label(h),
+                    "classification": "unrequested",
+                    "reason": "creep",
+                }
+                for h in hunks
+            ],
+            "summary": "creep",
+        }
+        result = run(
+            git_repo,
+            task="add notes about the deployment process",
+            agent=True,
+            agent_client=FakeClient(text_response(payload)),
+        )
+        assert result.report.verdict == "review"
+
+    def test_agent_failure_degrades_to_pass_1(self, git_repo: Path):
+        class Exploding:
+            class messages:
+                @staticmethod
+                def create(**_: object):
+                    raise RuntimeError("upstream 503")
+
+        (git_repo / "worker.py").write_text("def f():\n    pass\n", encoding="utf-8")
+        result = run(git_repo, task="add a worker", agent=True, agent_client=Exploding())
+        assert result.agent_status == "error"
+        assert "upstream 503" in (result.agent_error or "")
+        # The Pass 1 report survived.
+        assert any(f.code == "placeholder-code" for f in result.report.deterministic)
+
+    def test_cost_appears_in_the_wire_report(self, git_repo: Path):
+        (git_repo / "app.py").write_text("def greet():\n    return 'hello'\n", encoding="utf-8")
+        hunks = get_hunks(DiffMode.working(), git_repo)
+        payload = {
+            "hunks": [
+                {
+                    "file": h.file,
+                    "range": hunk_range_label(h),
+                    "classification": "requested",
+                    "reason": "r",
+                }
+                for h in hunks
+            ],
+            "summary": "matches",
+        }
+        result = run(
+            git_repo,
+            task="make greet say hello",
+            agent=True,
+            agent_client=FakeClient(text_response(payload)),
+        )
+        cost = result.report.to_json_dict()["agent"]["cost"]
+        assert set(cost) == {"inputTokens", "outputTokens", "toolCalls"}
 
 
 class TestCheckIsolation:

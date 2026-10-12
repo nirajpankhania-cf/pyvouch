@@ -176,6 +176,9 @@ class ProjectAccess(BaseModel):
     # Modules that re-export dynamically (star imports, __getattr__), where an
     # absent name proves nothing.
     opaque_modules: set[str] = Field(default_factory=set)
+    # Directory -> module names importable as siblings from files in it. Test
+    # helpers like conftest and local fixtures are imported this way.
+    sibling_modules: dict[str, set[str]] = Field(default_factory=dict)
 
 
 class CheckContext(BaseModel):

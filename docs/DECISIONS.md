@@ -26,3 +26,9 @@ One line per significant technical decision: `choice over alternative: reason`.
 - Python keywords (`import`, `self`, `def`, `return`) treated as scope stopwords: they appear in nearly every Python file, so counting them as signal would rescue every file from scope-drift.
 - Assertion counting by net delta over AST body comparison: a refactor that moves assertions nets to zero and stays silent, so only real loss flags.
 - Findings sorted by severity then file then line in the pipeline over check-registration order: the terminal report should lead with what matters most.
+- Anthropic client injected into `run_agent` over constructed internally: the loop is then fully testable offline with a scripted fake, and the SDK stays an optional dependency.
+- Agent client duck-typed via `Protocol` over importing SDK types: nothing in the loop requires `anthropic` to be installed.
+- Tool budget enforced by withdrawing the tools from the request over trusting the model to stop: removing the capability is what actually forces a verdict.
+- Verdict classifications reconciled against the hunks we sent over trusting the model's file list: a fabricated path in the report would be worse than a missing one; falls back to file-only matching when ranges drift.
+- Model-emitted findings validated against the whole agentic taxonomy over just the emittable subset: a valid-but-derived code degrades to a dropped finding rather than failing the parse of an otherwise good verdict.
+- Sibling-module resolution via `sibling_modules` over adding `tests/` as a source root: Python and pytest both put a file's own directory on `sys.path`, which is a per-directory fact, not a project-wide one (dogfooded, `docs/CAUGHT.md`).
