@@ -88,8 +88,25 @@ class TestJsonOutput:
         result = runner.invoke(app, ["check", "-m", "add a worker", "--no-agent", "--json"])
         payload = json.loads(result.stdout)
         assert payload["version"] == 1
-        assert set(payload) == {"version", "task", "deterministic", "agent", "verdict", "meta"}
+        assert set(payload) == {
+            "version",
+            "task",
+            "changes",
+            "deterministic",
+            "agent",
+            "verdict",
+            "meta",
+        }
         assert payload["agent"] == {"ran": False}
+
+    def test_changes_carry_the_diff_the_findings_refer_to(self, git_repo: Path, monkeypatch):
+        (git_repo / "worker.py").write_text("def f():\n    pass\n", encoding="utf-8")
+        monkeypatch.chdir(git_repo)
+        result = runner.invoke(app, ["check", "-m", "add a worker", "--no-agent", "--json"])
+        (change,) = json.loads(result.stdout)["changes"]
+        assert change["file"] == "worker.py"
+        assert change["status"] == "added"
+        assert [line["text"] for line in change["lines"]] == ["def f():", "    pass"]
 
     def test_json_mode_prints_no_human_decoration(self, git_repo: Path, monkeypatch):
         monkeypatch.chdir(git_repo)

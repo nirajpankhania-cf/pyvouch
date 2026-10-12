@@ -84,6 +84,12 @@ Read-only tools: `read_file`, `read_git_log`, `list_dir`, `search`. Budget ~15 t
 
 Default model: `claude-opus-5-5` (config override). Degrade cleanly with no API key (`--no-agent` behavior).
 
+Pass 2 is the only part of vouch that leaves the machine. Files whose contents are
+credentials — `.env`, `*.pem`, `id_rsa`, `credentials`, and similar by name — are sent as
+a path and a line count only; `read_file` refuses them and `search` drops matches from
+them. Such a hunk is still classified, because an unrequested `.env` is worth flagging; it
+is simply judged by its path. This is a safety floor by filename, not secret detection.
+
 The pipeline reports why the agent did or didn't run — `ran` · `disabled` · `no-api-key` ·
 `no-hunks` · `error` — so the CLI can explain a Pass-1-only result instead of silently
 omitting Pass 2. Agent failures degrade; they never crash the run.
@@ -110,10 +116,24 @@ Versioning: additive → same version; breaking → bump.
 Keys are camelCase on the wire so the React client reads them idiomatically; Python
 attributes stay snake_case and serialize through a pydantic alias generator.
 
+`changes` is the parsed diff, present whether or not Pass 2 ran. It makes a report
+self-contained: a stored run is still inspectable after the working tree has moved on,
+which is what lets the UI reopen history. Pass 2's `agent.hunks` reference these by
+`file` + `range` rather than repeating them.
+
 ```jsonc
 {
   "version": 1,
   "task": { "text": "...", "source": "flag|taskfile|transcript|prompt|api" },
+  "changes": [
+    {
+      "file": "...", "oldFile": null,
+      "status": "added|deleted|modified|renamed|binary",
+      "oldStart": 0, "oldLines": 0, "newStart": 0, "newLines": 0,
+      "lines": [ { "kind": "add|del|context", "text": "...",
+                   "oldLine": null, "newLine": 1 } ]
+    }
+  ],
   "deterministic": [ /* Finding */ ],
   "agent": {
     "ran": true,

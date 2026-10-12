@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from vouch.agent.secrets import holds_secrets
 from vouch.context.gitcmd import GitError, run_git
 
 MAX_FILE_LINES = 200
@@ -140,6 +141,10 @@ def _read_file(data: dict[str, Any], repo_root: str | Path) -> str:
         return f"ERROR: path escapes repository root: {raw_path}"
     if resolved.is_dir():
         return f"ERROR: not a file: {raw_path}"
+    if holds_secrets(raw_path):
+        # The jail stops paths leaving the repo; this stops credentials
+        # leaving the machine. Classify it by its path instead.
+        return f"ERROR: refusing to read a credentials file: {raw_path}"
 
     text = resolved.read_text(encoding="utf-8", errors="replace")
     lines = text.split("\n")
@@ -203,7 +208,13 @@ def _search(data: dict[str, Any], repo_root: str | Path) -> str:
     except GitError as exc:
         return f"ERROR: {exc}"
 
-    lines = [line for line in out.split("\n") if line]
+    # A match line carries the matching content, so searching is another way
+    # to read a secret.
+    lines = [
+        line
+        for line in out.split("\n")
+        if line and not holds_secrets(line.split(":", 1)[0])
+    ]
     if not lines:
         return f"(no matches for: {pattern})"
     shown = "\n".join(lines[:MAX_SEARCH_LINES])

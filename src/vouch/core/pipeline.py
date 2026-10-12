@@ -85,7 +85,7 @@ def run_pipeline(opts: PipelineOptions) -> PipelineResult:
     )
 
     return PipelineResult(
-        report=build_report(task, _ordered(findings), section, meta),
+        report=build_report(task, _ordered(findings), section, meta, changes=hunks),
         duration_ms=(time.perf_counter() - started) * 1000,
         agent_status=status,
         agent_error=error,

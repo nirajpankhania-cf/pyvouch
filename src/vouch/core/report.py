@@ -13,6 +13,7 @@ from pydantic import Field
 from vouch.core.types import (
     Classification,
     Finding,
+    Hunk,
     TaskInfo,
     Verdict,
     WireModel,
@@ -52,6 +53,9 @@ class ReportMeta(WireModel):
 class VouchReport(WireModel):
     version: int = 1
     task: TaskInfo
+    # The diff itself, so a stored run stays inspectable after the working
+    # tree has moved on. Pass 2 classifications reference these by file+range.
+    changes: list[Hunk] = Field(default_factory=list)
     deterministic: list[Finding] = Field(default_factory=list)
     agent: AgentSection = Field(default_factory=AgentSection)
     verdict: Verdict = "clean"
@@ -135,10 +139,12 @@ def build_report(
     findings: list[Finding],
     agent: AgentSection | None = None,
     meta: ReportMeta | None = None,
+    changes: list[Hunk] | None = None,
 ) -> VouchReport:
     section = agent or AgentSection()
     return VouchReport(
         task=task,
+        changes=changes or [],
         deterministic=findings,
         agent=section,
         verdict=verdict_of(findings, section),

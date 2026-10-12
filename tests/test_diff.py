@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -14,8 +15,14 @@ from vouch.context.diff import (
     get_hunks,
     parse_diff_to_hunks,
 )
+from vouch.core.types import Hunk
 
 FIXTURES = Path(__file__).parent / "fixtures" / "diff"
+
+# Shared with the UI; see the fixture's own comment.
+_RANGE_CASES: list[dict] = json.loads(
+    (Path(__file__).parent / "contract" / "hunk-ranges.json").read_text(encoding="utf-8")
+)["cases"]
 
 
 def load(name: str) -> str:
@@ -134,9 +141,39 @@ class TestRangeProperty:
         start, end = hunk.range.split("-")
         assert int(end) - int(start) + 1 == hunk.new_lines
 
-    def test_zero_new_lines_renders_a_single_number(self):
+    def test_a_deletion_is_labelled_by_the_lines_it_removed(self):
+        # The new side is empty, so the old side is the only useful label.
         (hunk,) = hunks_for("delete")
-        assert "-" not in hunk.range
+        start, end = hunk.range.split("-")
+        assert int(end) - int(start) + 1 == hunk.old_lines
+
+    def test_binary_has_no_line_range(self):
+        (hunk,) = hunks_for("binary")
+        assert hunk.range == "binary"
+
+    def test_the_label_is_what_the_agent_echoes(self):
+        # The UI joins Pass 2 classifications onto `changes` with this string.
+        from vouch.agent.prompts import hunk_range_label
+
+        for name in ("modify", "delete", "binary", "multi-hunk"):
+            for hunk in hunks_for(name):
+                assert hunk_range_label(hunk) == hunk.range
+
+
+class TestRangeContract:
+    """The same cases the UI asserts, so the two implementations cannot drift."""
+
+    @pytest.mark.parametrize("case", _RANGE_CASES, ids=lambda case: case["name"])
+    def test_matches_the_shared_fixture(self, case: dict):
+        hunk = Hunk(
+            file="x.py",
+            status=case["status"],
+            old_start=case["oldStart"],
+            old_lines=case["oldLines"],
+            new_start=case["newStart"],
+            new_lines=case["newLines"],
+        )
+        assert hunk.range == case["range"]
 
 
 class TestEmptyAndMalformed:

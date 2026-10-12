@@ -51,10 +51,18 @@ class Hunk(WireModel):
 
     @property
     def range(self) -> str:
-        """Human-readable new-side line range, e.g. "12-20"."""
-        if self.new_lines == 0:
-            return str(self.new_start)
-        return f"{self.new_start}-{self.new_start + self.new_lines - 1}"
+        """The hunk's stable label, e.g. "12-20".
+
+        One definition, three consumers: the agent prompt shows it, the agent
+        echoes it back in its verdict, and the UI joins classifications onto
+        `changes` with it. A deletion has no new side worth showing, so it is
+        labelled by the lines it removed.
+        """
+        if self.status == "binary":
+            return "binary"
+        if self.status == "deleted":
+            return f"{self.old_start}-{self.old_start + max(self.old_lines, 1) - 1}"
+        return f"{self.new_start}-{self.new_start + max(self.new_lines, 1) - 1}"
 
     def added_lines(self) -> list[HunkLine]:
         return [ln for ln in self.lines if ln.kind == "add"]

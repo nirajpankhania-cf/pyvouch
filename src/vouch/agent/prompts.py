@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from vouch.agent.secrets import holds_secrets
 from vouch.core.types import Hunk, TaskInfo
 
 RUBRIC = """You are vouch, a verifier that checks whether an AI agent's code changes match \
@@ -250,12 +251,12 @@ def build_retry_prompt(error_text: str) -> str:
 
 
 def hunk_range_label(hunk: Hunk) -> str:
-    """Stable label shown in the prompt and echoed back in the verdict."""
-    if hunk.status == "binary":
-        return "binary"
-    if hunk.status == "deleted":
-        return f"{hunk.old_start}-{hunk.old_start + max(hunk.old_lines, 1) - 1}"
-    return f"{hunk.new_start}-{hunk.new_start + max(hunk.new_lines, 1) - 1}"
+    """Stable label shown in the prompt and echoed back in the verdict.
+
+    Defined by `Hunk.range` so the label the model returns is the same string
+    the UI uses to attach a classification to a hunk.
+    """
+    return hunk.range
 
 
 _SIGNS = {"add": "+", "del": "-", "context": " "}
@@ -263,6 +264,14 @@ _SIGNS = {"add": "+", "del": "-", "context": " "}
 
 def _render_hunk(hunk: Hunk) -> str:
     head = f"### {hunk.file} [{hunk_range_label(hunk)}] ({hunk.status})"
+    if holds_secrets(hunk.file):
+        added = len(hunk.added_lines())
+        removed = len(hunk.removed_lines())
+        return (
+            f"{head}\n(contents withheld — this file holds credentials; "
+            f"{added} line(s) added, {removed} removed. "
+            f"Judge it by its path and the task alone.)"
+        )
     if hunk.status == "binary":
         return f"{head}\n(binary file changed)"
     if not hunk.lines:

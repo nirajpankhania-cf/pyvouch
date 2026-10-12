@@ -114,3 +114,55 @@ Sixteen API tests failed. The tests caught it; vouch structurally cannot — it'
 concurrency property, not an intent mismatch, and "does this diff match the task?" has
 nothing to say about it. Worth writing down precisely because a clean verdict is easy to
 over-read: `clean` means *no evidence of the five failure modes*, not *correct*.
+
+## 2026-10-12 · `scope-drift` · a build artifact that should never have been tracked
+
+Dogfooding the Phase 6 diff:
+
+```
+info  scope-drift   frontend/index.html
+info  scope-drift   frontend/tsconfig.tsbuildinfo
+```
+
+One true positive, one false. `tsconfig.tsbuildinfo` is a TypeScript incremental-build
+cache that `.gitignore` didn't cover — it would have been committed, and would have
+churned on every build thereafter. Fixed by ignoring `*.tsbuildinfo`.
+
+`frontend/index.html` is the false positive, and an instructive one: it's twelve lines of
+unavoidable scaffolding whose only words are `html`, `head`, `body` and `root`, so it
+shares no tokens with any task anyone would write. The heuristic has no way to know that.
+It reports `info`/`low` for exactly this reason — scope drift is a question, not a verdict.
+
+Worth noting the shape of the win: the finding that mattered wasn't about intent at all.
+A file-level "this doesn't look related to your task" sweep catches tracked junk as a side
+effect, because build artifacts are never related to the task.
+
+## 2026-10-12 · a real API key sent to the model, by vouch itself
+
+Not a finding — the opposite. The first live Pass 2 run (a scratch repo, a deliberately
+sloppy diff) came back with this classification:
+
+```
+warn  unrequested-change  .env:1
+      This adds a .env config file containing what looks like a real Anthropic
+      API key, which has nothing to do with changing the greeting in app.py.
+```
+
+The judgement is correct. The problem is how it was reached: the model could describe the
+key because the key was in the prompt. `get_hunks` synthesizes untracked files as added
+hunks — deliberately, since a file an agent just wrote is exactly what vouch exists to
+inspect — and that scratch repo had no `.gitignore`, so the `.env` became a hunk and its
+contents were rendered verbatim into the request.
+
+A tool whose entire job is sending your diff to a model has no business shipping your
+credentials with it.
+
+**Fix:** `vouch.agent.secrets.holds_secrets` gates three paths out, not one. Prompts render
+such hunks as a path and a line count; `read_file` refuses them; `search` drops matching
+lines. Re-running gave the same verdict with a reason that no longer quotes anything:
+*"nothing in it calls for adding a credentials file."* Still classified, still `unrequested`,
+no secret in the payload.
+
+Two things worth keeping: the gate is by filename, which is a floor and not detection; and
+the hunk is withheld rather than dropped, because an unrequested `.env` is a finding worth
+having.

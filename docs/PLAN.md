@@ -46,7 +46,8 @@ One phase ≈ focused session(s). End each phase with: tests green, decision not
 - [x] Cost in report; no-key degradation; injected client for tests
 - [x] Default model `claude-opus-5-5`
 - [x] Fabrication guard: classifications for hunks we never sent are dropped
-- [ ] Verify against the live API (needs `ANTHROPIC_API_KEY`)
+- [x] Verify against the live API (needs `ANTHROPIC_API_KEY`)
+- [x] Credentials withheld from prompts and read-only tools
 
 ## Phase 5 — Store + API
 
@@ -57,11 +58,11 @@ One phase ≈ focused session(s). End each phase with: tests green, decision not
 
 ## Phase 6 — React workspace UI
 
-- [ ] Request review form (task, mode, no-agent)
-- [ ] Inspection layout: history | hunks | findings
-- [ ] Reopen historical runs
-- [ ] Copy JSON; verdict/cost header
-- [ ] Full-stack happy path demoable without terminal
+- [x] Request review form (task, mode, no-agent)
+- [x] Inspection layout: history | hunks | findings
+- [x] Reopen historical runs
+- [x] Copy JSON; verdict/cost header
+- [x] Full-stack happy path demoable without terminal
 
 ## Phase 7 — Polish
 

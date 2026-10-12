@@ -1,0 +1,86 @@
+{
+  "_comment": "Shared contract: Python's Hunk.range and the UI's hunkRange() must agree exactly, because agent.hunks[].range is the key the workspace joins classifications onto changes with. Asserted by tests/test_diff.py and frontend/src/types.test.ts.",
+  "cases": [
+    {
+      "name": "a modified region is labelled by its new side",
+      "status": "modified",
+      "oldStart": 1,
+      "oldLines": 4,
+      "newStart": 1,
+      "newLines": 6,
+      "range": "1-6"
+    },
+    {
+      "name": "a single added line",
+      "status": "modified",
+      "oldStart": 9,
+      "oldLines": 0,
+      "newStart": 10,
+      "newLines": 1,
+      "range": "10-10"
+    },
+    {
+      "name": "a pure removal still gets a one-line label",
+      "status": "modified",
+      "oldStart": 12,
+      "oldLines": 3,
+      "newStart": 11,
+      "newLines": 0,
+      "range": "11-11"
+    },
+    {
+      "name": "an added file spans the whole new side",
+      "status": "added",
+      "oldStart": 0,
+      "oldLines": 0,
+      "newStart": 1,
+      "newLines": 12,
+      "range": "1-12"
+    },
+    {
+      "name": "a deleted file is labelled by the lines it removed",
+      "status": "deleted",
+      "oldStart": 1,
+      "oldLines": 8,
+      "newStart": 0,
+      "newLines": 0,
+      "range": "1-8"
+    },
+    {
+      "name": "a one-line deletion",
+      "status": "deleted",
+      "oldStart": 1,
+      "oldLines": 1,
+      "newStart": 0,
+      "newLines": 0,
+      "range": "1-1"
+    },
+    {
+      "name": "a deleted file reporting zero old lines still labels one",
+      "status": "deleted",
+      "oldStart": 1,
+      "oldLines": 0,
+      "newStart": 0,
+      "newLines": 0,
+      "range": "1-1"
+    },
+    {
+      "name": "a renamed file is labelled by its new side",
+      "status": "renamed",
+      "oldStart": 1,
+      "oldLines": 3,
+      "newStart": 1,
+      "newLines": 3,
+      "range": "1-3"
+    },
+    {
+      "name": "binary content has no line range at all",
+      "status": "binary",
+      "oldStart": 0,
+      "oldLines": 0,
+      "newStart": 0,
+      "newLines": 0,
+      "range": "binary"
+    }
+  ]
+}

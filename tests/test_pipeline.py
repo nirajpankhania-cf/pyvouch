@@ -157,6 +157,38 @@ class TestBothPassesTogether:
         assert any(f.code == "unrequested-change" for f in result.report.agent.findings)
         assert result.report.verdict == "review"
 
+    def test_every_classification_binds_to_a_hunk_in_changes(self, git_repo: Path):
+        """The key the workspace UI joins on. A miss means an untagged hunk."""
+        (git_repo / "worker.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+        (git_repo / "app.py").unlink()
+        (git_repo / "notes.md").write_text("prose\n", encoding="utf-8")
+        hunks = get_hunks(DiffMode.working(), git_repo)
+        payload = {
+            "hunks": [
+                {
+                    "file": h.file,
+                    "range": hunk_range_label(h),
+                    "classification": "supporting",
+                    "reason": "r",
+                }
+                for h in hunks
+            ],
+            "summary": "s",
+        }
+        report = run(
+            git_repo,
+            task="add a worker",
+            agent=True,
+            agent_client=FakeClient(text_response(payload)),
+        ).report
+
+        # A deletion is in the diff, so this exercises the old-side label too.
+        assert {h.status for h in report.changes} >= {"added", "deleted"}
+        available = {(h.file, h.range) for h in report.changes}
+        assert available
+        for classified in report.agent.hunks:
+            assert (classified.file, classified.range) in available
+
     def test_agent_cannot_escalate_a_clean_pass_1_to_fail(self, git_repo: Path):
         (git_repo / "notes.md").write_text("some prose\n", encoding="utf-8")
         hunks = get_hunks(DiffMode.working(), git_repo)

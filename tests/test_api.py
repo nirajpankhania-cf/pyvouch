@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from vouch import __version__
@@ -60,6 +61,50 @@ class TestHealth:
         schema = client.get("/openapi.json").json()
         assert "/reviews" in schema["paths"]
         assert "/reviews/{run_id}" in schema["paths"]
+
+
+class TestServingTheBuiltUi:
+    """A built image serves the workspace and the API on one port."""
+
+    def built(self, tmp_path: Path, monkeypatch) -> FastAPI:
+        dist = tmp_path / "dist"
+        dist.mkdir()
+        (dist / "index.html").write_text("<html>workspace</html>", encoding="utf-8")
+        (dist / "app.js").write_text("console.log(1)", encoding="utf-8")
+        monkeypatch.setenv(app_module.UI_DIR_ENV, str(dist))
+
+        fresh = FastAPI()
+        fresh.get("/health")(lambda: {"status": "ok"})
+        assert app_module.mount_ui(fresh) is True
+        return fresh
+
+    def test_root_serves_the_bundle(self, tmp_path: Path, monkeypatch):
+        with TestClient(self.built(tmp_path, monkeypatch)) as client:
+            assert "workspace" in client.get("/").text
+
+    def test_assets_are_served(self, tmp_path: Path, monkeypatch):
+        with TestClient(self.built(tmp_path, monkeypatch)) as client:
+            assert client.get("/app.js").status_code == 200
+
+    def test_api_routes_still_win(self, tmp_path: Path, monkeypatch):
+        with TestClient(self.built(tmp_path, monkeypatch)) as client:
+            assert client.get("/health").json() == {"status": "ok"}
+
+    def test_a_missing_asset_is_still_a_404(self, tmp_path: Path, monkeypatch):
+        # The workspace is one screen with no client-side routes, so there is
+        # deliberately no index.html fallback hiding broken asset paths.
+        with TestClient(self.built(tmp_path, monkeypatch)) as client:
+            assert client.get("/assets/missing.js").status_code == 404
+
+    def test_nothing_is_mounted_without_a_build(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv(app_module.UI_DIR_ENV, str(tmp_path / "never-built"))
+        assert app_module.ui_directory() is None
+        assert app_module.mount_ui(FastAPI()) is False
+
+    def test_a_directory_without_index_html_is_not_a_build(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "dist").mkdir()
+        monkeypatch.setenv(app_module.UI_DIR_ENV, str(tmp_path / "dist"))
+        assert app_module.ui_directory() is None
 
 
 class TestOpenApiMatchesSpec:

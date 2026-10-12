@@ -13,6 +13,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from vouch import __version__
 from vouch.api.schemas import (
@@ -31,6 +32,8 @@ from vouch.store.runs import RunStore, default_db_path
 
 # The repo under review. In the container this is the read-only mount.
 REPO_ROOT_ENV = "VOUCH_REPO_ROOT"
+# The built frontend. Absent in dev, where Vite serves it instead.
+UI_DIR_ENV = "VOUCH_UI_DIR"
 
 # Before the app exists, so /health reports key availability accurately.
 load_env_file()
@@ -133,3 +136,28 @@ def get_review(run_id: str, store: Store) -> dict:
     if report is None:
         raise HTTPException(status_code=404, detail=f"no review with id '{run_id}'")
     return report
+
+
+def ui_directory() -> Path | None:
+    """The built workspace, if there is one. In dev the Vite server serves it."""
+    override = os.environ.get(UI_DIR_ENV)
+    root = Path(__file__).resolve().parents[3]
+    candidate = Path(override) if override else root / "frontend" / "dist"
+    return candidate if (candidate / "index.html").is_file() else None
+
+
+def mount_ui(target: FastAPI) -> bool:
+    """Serve the built workspace at ``/``. Returns whether there was one.
+
+    Called after the API routes are declared so they still win. ``html=True``
+    serves index.html for ``/`` itself; there is no catch-all fallback, since
+    the workspace is one screen and a 404 on an asset should stay a 404.
+    """
+    directory = ui_directory()
+    if directory is None:
+        return False
+    target.mount("/", StaticFiles(directory=str(directory), html=True), name="ui")
+    return True
+
+
+mount_ui(app)

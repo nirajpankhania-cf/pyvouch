@@ -13,6 +13,7 @@ dist/
 # Node (frontend/)
 node_modules/
 frontend/dist/
+*.tsbuildinfo
 
 # Local state
 .env
