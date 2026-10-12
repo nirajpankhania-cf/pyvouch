@@ -57,6 +57,24 @@ Pure functions on diff + task + project access.
 
 Finding fields: `check`, `code`, `severity`, `file`, `line?`, `message`, `confidence`.
 
+`severity`: `error` (objectively wrong) · `warn` (a human should look) · `info` (heuristic).
+`confidence`: `high` · `medium` · `low`. Heuristic checks always report `low`.
+
+A check that raises is a vouch bug, never a finding: the pipeline surfaces it as a tool error (exit `2`).
+
+## Verdict
+
+| Condition | Verdict | Exit |
+|---|---|---|
+| Any deterministic finding with `severity: error` | `fail` | 1 |
+| Else any deterministic finding at all (incl. `info`), or the agent ran and flagged anything | `review` | 1 |
+| Else | `clean` | 0 |
+
+Agent findings are always `warn` — model judgment is never an objective error, so Pass 2 can
+raise `review` but never `fail`. `info`-only findings still produce `review`: scope drift alone
+is deliberately consequential. Unrequested hunks count toward the verdict directly as well as
+through derived findings, so per-code config cannot silently downgrade a run.
+
 ## Pass 2 — Agentic
 
 Classify each hunk: `requested` | `supporting` | `unrequested`.
@@ -64,6 +82,10 @@ Classify each hunk: `requested` | `supporting` | `unrequested`.
 Read-only tools: `read_file`, `read_git_log`, `list_dir`, `search`. Budget ~15 tool calls then force verdict. Surface cost.
 
 Default model: `claude-opus-5-5` (config override). Degrade cleanly with no API key (`--no-agent` behavior).
+
+The pipeline reports why the agent did or didn't run — `ran` · `disabled` · `no-api-key` ·
+`no-hunks` · `error` — so the CLI can explain a Pass-1-only result instead of silently
+omitting Pass 2. Agent failures degrade; they never crash the run.
 
 ### Agentic issue codes
 
@@ -83,6 +105,9 @@ Anything mechanical belongs in Pass 1, not the LLM.
 ## JSON report (v1)
 
 Versioning: additive → same version; breaking → bump.
+
+Keys are camelCase on the wire so the React client reads them idiomatically; Python
+attributes stay snake_case and serialize through a pydantic alias generator.
 
 ```jsonc
 {

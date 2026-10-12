@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vouch"
+version = "0.1.0"
+description = "Intent-aware verification for AI-written Python"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "AGPL-3.0-only" }
+authors = [{ name = "nirajpankhania-cf" }]
+dependencies = [
+    "typer>=0.15",
+    "pydantic>=2.9",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0",
+]
+agent = [
+    "anthropic>=0.40",
+]
+dev = [
+    "vouch[api,agent]",
+    "pytest>=8.3",
+    "ruff>=0.8",
+    "httpx>=0.28",
+]
+
+[project.scripts]
+vouch = "vouch.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vouch"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

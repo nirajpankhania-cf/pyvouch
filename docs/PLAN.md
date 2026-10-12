@@ -4,12 +4,14 @@ One phase ≈ focused session(s). End each phase with: tests green, decision not
 
 ## Phase 0 — Scaffold
 
-- [ ] `uv` (or poetry) Python package `vouch`, ruff, pytest, pyproject scripts
-- [ ] Typer CLI skeleton: `vouch check --help`
-- [ ] FastAPI hello `/health`
-- [ ] Vite React app shell in `frontend/`
-- [ ] CI: lint + test
-- [ ] Copy agent docs (`CLAUDE.md`, `AGENTS.md`, this PLAN/SPEC)
+- [x] `venv` + pip Python package `vouch`, ruff, pytest, pyproject scripts
+- [x] Typer CLI skeleton: `vouch check --help`, `vouch list-codes`, `vouch version`
+- [x] FastAPI hello `/health`
+- [ ] Vite React app shell in `frontend/` — deferred to Phase 6
+- [x] CI: lint + test (3.12 / 3.13)
+- [x] Agent docs in place (`AGENTS.md`, PLAN/SPEC/DECISIONS; `CLAUDE.md` is local-only)
+- [x] Dockerfile + compose, target repo mounted read-only
+- [x] Shared types, report schema, verdict rule (pulled forward from Phase 1)
 
 ## Phase 1 — Context layer (no LLM)
 

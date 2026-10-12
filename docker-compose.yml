@@ -1,0 +1,16 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8741:8741"
+    environment:
+      # Set on the host to enable the agentic pass; absent degrades to Pass 1.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      VOUCH_REPO_ROOT: /workspace
+    volumes:
+      # Read-only: the verifier must never mutate the repo under review.
+      - ${VOUCH_TARGET_REPO:-.}:/workspace:ro
+      - vouch-runs:/data
+
+volumes:
+  vouch-runs:
